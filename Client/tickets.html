@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMSI - Tickets Log</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">
+            <img src="logo.png" alt="SMSI Logo">
+        </div>
+        <div class="nav-buttons">
+            <a href="index.html" class="btn">Home</a>
+            <a href="tickets.html" class="btn active-page">Tickets Log</a>
+            <a href="management.html" class="btn">Management</a>
+            <a href="technician.html" class="btn">Technician</a>
+            <a href="response.html" class="btn">Response</a>
+        </div>
+    </nav>
+
+    <div class="content">
+        <h1>Tickets Log</h1>
+        
+        <button class="create-btn">Create Ticket</button>
+
+        <table class="ticket-table" id="ticketTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Issue</th>
+                    <th>Status</th>
+                    <th>Technician</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>001</td>
+                    <td>Network Down</td>
+                    <td>Open</td>
+                    <td>John</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        window.onload = function() {
+    
+            let dataFromResponse = localStorage.getItem("newTicketUpdate");
+
+            if (dataFromResponse) {
+                
+                let ticket = JSON.parse(dataFromResponse);
+
+                
+                let tableBody = document.querySelector("#ticketTable tbody");
+
+                
+                let newRow = tableBody.insertRow();
+
+                
+                newRow.innerHTML = `
+                    <td>${ticket.id}</td>
+                    <td>${ticket.issue}</td>
+                    <td>${ticket.status}</td>
+                    <td>${ticket.tech}</td>
+                `;
+
+                
+            }
+        }
+    </script>
+
+</body>
+</html>

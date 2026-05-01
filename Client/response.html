@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMSI - Response Panel</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">
+            <img src="logo.png" alt="SMSI Logo">
+        </div>
+        <div class="nav-buttons">
+            <a href="tickets.html" class="btn">Tickets Log</a>
+            <a href="management.html" class="btn">Management</a>
+            <a href="technician.html" class="btn">Technician</a>
+            <a href="response.html" class="btn active-page">Response</a>
+            <a href="activity.html" class="btn">Activity Log</a>
+        </div>
+    </nav>
+
+    <div class="content">
+        <h1>Response Panel</h1>
+        
+        <div class="form-container">
+            <input type="text" id="ticketID" placeholder="Ticket ID (e.g., 001)" style="display: block; margin-bottom: 10px; width: 250px; padding: 5px;">
+            
+            <textarea id="responseText" placeholder="Write response..." rows="4" style="display: block; margin-bottom: 10px; width: 400px; padding: 5px;"></textarea>
+            
+            <button type="button" class="create-btn" onclick="validateResponse()">Submit</button>
+            
+            <p id="feedback" style="margin-top: 15px; font-weight: bold;"></p>
+        </div>
+    </div>
+
+    <script>
+        function validateResponse() {
+            var idInput = document.getElementById("ticketID").value;
+            var responseInput = document.getElementById("responseText").value;
+            var feedback = document.getElementById("feedback");
+
+            var existingTickets = ["001", "002", "003", "22"]; 
+
+            if (idInput === "" || responseInput === "") {
+                feedback.style.color = "orange";
+                feedback.innerHTML = "⚠️ Please fill in all fields.";
+            } 
+            else if (existingTickets.includes(idInput)) {
+                let ticketUpdate = {
+                    id: idInput,
+                    issue: responseInput,
+                    status: "Responded",
+                    tech: "Admin"
+                };
+
+                localStorage.setItem("newTicketUpdate", JSON.stringify(ticketUpdate));
+
+                feedback.style.color = "green";
+                feedback.innerHTML = "✅ Success! Response sent to Tickets Log.";
+
+                document.getElementById("ticketID").value = "";
+                document.getElementById("responseText").value = "";
+            } 
+            else {
+                feedback.style.color = "red";
+                feedback.innerHTML = "❌ Error: Ticket ID does not exist.";
+            }
+        }
+    </script>
+
+</body>
+</html>

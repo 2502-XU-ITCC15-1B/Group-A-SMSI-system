@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMSI System - Home</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">
+            <img src="logo.png" alt="SMSI Logo">
+        </div>
+        <div class="nav-buttons" id="navLinks" style="pointer-events: none; opacity: 0.4;">
+            <a href="tickets.html" class="btn">Tickets Log</a>
+            <a href="management.html" class="btn">Management</a>
+            <a href="technician.html" class="btn">Technician</a>
+            <a href="response.html" class="btn">Response</a>
+            <a href="activity.html" class="btn">Activity Log</a>
+        </div>
+    </nav>
+
+    <div class="content">
+        <h1>Home</h1>
+        <p>Please enter your Access Code to proceed:</p>
+        
+        <div style="margin-top: 20px;">
+            <input type="text" id="userInput" placeholder="Enter Code (e.g. SMSI-2026)" 
+                style="padding: 10px; width: 250px; border-radius: 5px; border: 1px solid #ccc;">
+            
+            <button type="button" class="btn" onclick="checkData()">Submit</button>
+        </div>
+        
+        <p id="errorBox" style="margin-top: 15px; font-weight: bold; font-size: 14px;"></p>
+
+        <p style="margin-top: 40px; color: #666;">Solutions Management Systems Inc. - 2026</p>
+    </div>
+
+    <script>
+        async function checkData() {
+            var input = document.getElementById("userInput").value;
+            var errorBox = document.getElementById("errorBox");
+            var nav = document.getElementById("navLinks");
+
+            if (input === "") {
+                errorBox.style.color = "orange";
+                errorBox.innerHTML = "⚠️ Please do not leave the field blank.";
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:5000/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: input })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    errorBox.style.color = "green";
+                    errorBox.innerHTML = "✅ " + data.message;
+                    
+                    nav.style.pointerEvents = "auto"; 
+                    nav.style.opacity = "1";          
+
+                    sessionStorage.setItem("accessPermitted", "true");
+                    
+                    setTimeout(function() {
+                        window.location.href = "management.html"; 
+                    }, 1000);
+                } else {
+                    errorBox.style.color = "red";
+                    errorBox.innerHTML = "❌ " + data.message;
+                }
+            } catch (error) {
+                errorBox.style.color = "red";
+                errorBox.innerHTML = "❌ Connection Error: Please ensure the 'Node.js API' is running on the server.";
+            }
+        }
+
+        window.onload = function() {
+            if (sessionStorage.getItem("accessPermitted") === "true") {
+                var nav = document.getElementById("navLinks");
+                nav.style.pointerEvents = "auto";
+                nav.style.opacity = "1";
+            }
+        }
+    </script>
+
+</body>
+</html>
+

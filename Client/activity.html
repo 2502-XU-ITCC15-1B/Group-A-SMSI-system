@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMSI - Activity Log</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">
+            <img src="logo.png" alt="SMSI Logo">
+        </div>
+        <div class="nav-buttons">
+            <a href="index.html" class="btn">Home</a>
+            <a href="tickets.html" class="btn">Tickets Log</a>
+            <a href="management.html" class="btn">Management</a>
+            <a href="technician.html" class="btn">Technician</a>
+            <a href="response.html" class="btn">Response</a>
+            <a href="activity.html" class="btn active-page">Activity Log</a>
+        </div>
+    </nav>
+
+    <div class="content">
+        <h1>Activity Log</h1>
+        
+        <ul style="line-height: 2.0; font-size: 18px; margin-top: 20px;">
+            <li>Ticket #001 created</li>
+            <li>Assigned to John</li>
+            <li>Status updated</li>
+            <li>User Admin logged in - 08:00 AM</li>
+            <li>Ticket #001 updated by John - 10:30 AM</li>
+        </ul>
+    </div>
+
+    <script>
+    
+        window.onload = function() {
+            if (sessionStorage.getItem("accessPermitted") !== "true") {
+                alert("⚠️ Please enter the Access Code first.");
+                window.location.href = "index.html";
+            }
+        }
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMSI - Management Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">
+            <img src="logo.png" alt="SMSI Logo">
+        </div>
+        <div class="nav-buttons">
+            <a href="index.html" class="btn">Home</a>
+            <a href="tickets.html" class="btn">Tickets Log</a>
+            <a href="management.html" class="btn active-page">Management</a>
+            <a href="technician.html" class="btn">Technician</a>
+            <a href="response.html" class="btn">Response</a>
+            <a href="activity.html" class="btn">Activity Log</a>
+        </div>
+    </nav>
+
+    <div class="content">
+        <h1>Management Dashboard</h1>
+        
+        <div class="dashboard-info" style="margin-bottom: 30px;">
+            <p>Company: 
+                <select id="companySelect" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-weight: bold; cursor: pointer;">
+                    <option value="Company A">Company A</option>
+                    <option value="Company B">Company B</option>
+                    <option value="Company C">Company C</option>
+                </select>
+            </p>
+            <p>Total Tickets: <strong>25</strong></p>
+            <p>Resolved: <strong>18</strong></p>
+        </div>
+
+        <hr style="border: 0.5px solid #999; margin-bottom: 20px;">
+
+        <h3>Recent Tickets Log</h3>
+        <table class="ticket-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Issue</th>
+                    <th>Status</th>
+                    <th>Technician</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>001</td>
+                    <td>Network Down</td>
+                    <td>Open</td>
+                    <td id="techName1">Loading...</td>
+                </tr>
+                <tr>
+                    <td>002</td>
+                    <td>Software Update</td>
+                    <td>Resolved</td>
+                    <td id="techName2">Jane</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        window.onload = function() {
+            if (sessionStorage.getItem("accessPermitted") !== "true") {
+                alert("⚠️ Please enter the Access Code first.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            var loggedInUser = localStorage.getItem("loggedInUser");
+
+            if (loggedInUser) {
+                document.getElementById("techName1").innerText = loggedInUser;
+            } else {
+                document.getElementById("techName1").innerText = "Not Assigned";
+            }
+        }
+    </script>
+
+</body>
+</html>
