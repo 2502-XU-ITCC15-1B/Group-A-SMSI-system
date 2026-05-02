@@ -1,0 +1,45 @@
+version: '1.0'
+
+services:
+  # 1. Backend Service
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - backend_storage:/app/storage
+    depends_on:
+      - db
+    restart: always
+
+  # 2. Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+    env_file:
+      - ./frontend/.env
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    restart: always
+
+  # 3. Database Service
+  db:
+    image: mysql:8.0
+    restart: always
+    env_file:
+      - ./backend/.env
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+volumes:
+  db_data:
+  backend_storage:
