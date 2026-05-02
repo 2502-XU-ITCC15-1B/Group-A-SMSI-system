@@ -1,86 +1,68 @@
-const express = require('express');
-const cors = require('cors');
-const mysql = require('mysql2');
-const path = require('path');
-
+require('dotenv').config();
+ 
+const express  = require('express');
+const cors     = require('cors');
+ 
+// ── DB pool (import triggers the connection health check) ──
+require('./config/db');
+ 
+// ── Route modules ──────────────────────────────────────────
+const authRoutes    = require('./routes/auth.routes');
+const ticketRoutes  = require('./routes/tickets.routes');
+const userRoutes    = require('./routes/users.routes');
+const companyRoutes = require('./routes/companies.routes');
+const logRoutes     = require('./routes/logs.routes');
+ 
+// ── App setup ──────────────────────────────────────────────
 const app = express();
-
-app.use(cors()); 
+ 
+// CORS — tighten origin in production by setting ALLOWED_ORIGIN in .env
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGIN || '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+ 
 app.use(express.json());
-
-
-app.use(express.static(path.join(__dirname, 'frontend')));
-
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD, 
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306,
-  ssl: { rejectUnauthorized: false } 
-});
-
-db.connect(err => {
-  if (err) {
-    console.log("❌ Database connection failed:", err);
-  } else {
-    console.log("✅ Connected to MySQL Database (Aiven)");
-  }
-});
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
-});
-
-// 4. GET ALL TICKETS
-app.get('/api/tickets', (req, res) => {
-  const sql = "SELECT * FROM tickets ORDER BY id DESC";
-  db.query(sql, (err, result) => {
-    if (err) return res.status(500).json({ error: "Database error" });
-    res.json(result); 
+ 
+// ── Health check (public — no auth required) ───────────────
+app.get('/api/health', (req, res) => {
+  res.json({
+    status:  'ok',
+    system:  'WOMAN API',
+    version: '2.0.0',
+    time:    new Date().toISOString()
   });
 });
-
-// 5. CREATE TICKET
-app.post('/api/tickets', (req, res) => {
-  const { issue, technician, priority } = req.body;
-  const sql = "INSERT INTO tickets (issue, status, technician, priority) VALUES (?, 'Submitted', ?, ?)";
-  const values = [issue, technician || 'Unassigned', priority || 'Medium'];
-
-  db.query(sql, values, (err, result) => {
-    if (err) return res.status(500).json({ error: "Failed to create ticket" });
-    res.json({ success: true, message: "Ticket created!", id: result.insertId });
+ 
+// ── API routes ─────────────────────────────────────────────
+app.use('/api/auth',      authRoutes);
+app.use('/api/tickets',   ticketRoutes);
+app.use('/api/users',     userRoutes);
+app.use('/api/companies', companyRoutes);
+app.use('/api/logs',      logRoutes);
+ 
+// ── 404 handler — unknown API routes ──────────────────────
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ success: false, message: `Route not found: ${req.originalUrl}` });
+});
+ 
+// ── Global error handler ───────────────────────────────────
+// Catches any error passed via next(err) or thrown inside async middleware
+// when using Express 5 (which auto-wraps async errors).
+app.use((err, req, res, _next) => {
+  console.error('[Server Error]', err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'An unexpected error occurred.'
   });
 });
-
-app.post('/api/responses', (req, res) => {
-  const { ticketId } = req.body;
-  const sql = "UPDATE tickets SET status = 'Resolved' WHERE id = ?";
-  db.query(sql, [ticketId], (err, result) => {
-    if (err) return res.status(500).json({ success: false, message: "Update failed" });
-    res.json({ success: true, message: "Ticket updated!" });
-  });
-});
-
-app.post('/api/verify', (req, res) => {
-  const { code } = req.body;
-  const sql = "SELECT * FROM users WHERE password = ?";
-  db.query(sql, [code], (err, result) => {
-    if (err) return res.json({ success: false, message: "Database error" });
-    if (result.length > 0) {
-      res.json({ success: true, message: "Welcome to SMSI System!" });
-    } else {
-      res.json({ success: false, message: "Invalid Access Code!" });
-    }
-  });
-});
-
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
-});
-
+ 
+// ── Start ──────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 WOMAN API running on port ${PORT}`);
+  console.log(`🚀 WOMAN API running on port ${PORT}`);
+  console.log(`📋 Health check → http://localhost:${PORT}/api/health`);
 });
-
+ 
+module.exports = app;
