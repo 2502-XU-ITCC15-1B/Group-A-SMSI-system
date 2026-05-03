@@ -10,15 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function initializeProfileShell(user) {
-  document.getElementById('sessionUserName').textContent = user.name || 'Unknown User';
-  document.getElementById('sessionUserMeta').textContent = `${user.role}${user.department_name ? ` - ${user.department_name}` : ''}`;
-  document.getElementById('portalLabel').textContent = user.role === 'head' ? 'department head portal' : 'technician portal';
-
-  if (user.role === 'head') {
-    document.getElementById('navDashboard').href = '/head/dashboard.html';
-    document.getElementById('navTickets').href = '/head/tickets.html';
-    document.getElementById('navActivity').href = '/head/activity.html';
-  }
+  TechnicianPortal.configureShell(user, 'profile');
 }
 
 function bindProfileEvents() {
@@ -43,6 +35,7 @@ async function loadProfile() {
   document.getElementById('department').value = user.department_name || 'Not assigned';
   document.getElementById('sessionUserName').textContent = user.name || 'Unknown User';
   document.getElementById('sessionUserMeta').textContent = `${user.role}${user.department_name ? ` - ${user.department_name}` : ''}`;
+  document.getElementById('portalLabel').textContent = user.role === 'head' ? 'department head portal' : 'technician portal';
 }
 
 async function submitProfileUpdate(event) {

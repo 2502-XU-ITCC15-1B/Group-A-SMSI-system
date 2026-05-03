@@ -1006,7 +1006,7 @@ const AdminPortal = (() => {
       </section>
     `);
 
-    const report = await apiRequest('/reports');
+    const report = await apiRequest('/admin/reports');
     if (!report?.success) {
       throw new Error(report?.message || 'Unable to load reports.');
     }

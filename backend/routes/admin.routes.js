@@ -59,7 +59,7 @@ router.get('/dashboard', async (_req, res) => {
   }
 });
 
-// GET /api/reports
+// GET /api/admin/reports
 router.get('/reports', async (_req, res) => {
   try {
     const [[ticketMetrics], [priorityBreakdown], [companyBreakdown], [departmentBreakdown]] = await Promise.all([

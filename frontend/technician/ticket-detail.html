@@ -10,6 +10,7 @@
   <script src="../js/auth.js"></script>
   <script src="../js/ui-modals.js"></script>
   <script src="../js/utils.js"></script>
+  <script src="./common.js"></script>
   <script src="./ticket-detail.js" defer></script>
 </head>
 <body>
@@ -24,10 +25,10 @@
       </div>
 
       <nav>
-        <a class="nav-item" id="navDashboard" href="/technician/dashboard.html">Dashboard</a>
-        <a class="nav-item active" id="navTickets" href="/technician/tickets.html">Tickets</a>
-        <a class="nav-item" id="navActivity" href="/technician/activity.html">Activity</a>
-        <a class="nav-item" id="navProfile" href="/technician/profile.html">Profile</a>
+        <a class="nav-item" data-nav="dashboard" id="navDashboard" href="/technician/dashboard.html">Dashboard</a>
+        <a class="nav-item active" data-nav="tickets" id="navTickets" href="/technician/tickets.html">Tickets</a>
+        <a class="nav-item" data-nav="activity" id="navActivity" href="/technician/activity.html">Activity</a>
+        <a class="nav-item" data-nav="profile" id="navProfile" href="/technician/profile.html">Profile</a>
       </nav>
 
       <div class="sidebar-footer">

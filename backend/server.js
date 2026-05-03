@@ -48,7 +48,6 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/logs',        logRoutes);
 app.use('/api/profile',     profileRoutes);
 app.use('/api/admin',       adminRoutes);
-app.use('/api',             adminRoutes);
  
 // ── 404 handler — unknown API routes ──────────────────────
 app.use('/api/*', (req, res) => {

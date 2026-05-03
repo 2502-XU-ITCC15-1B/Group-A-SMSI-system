@@ -21,11 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function initializeShell() {
-  document.getElementById('sessionUserName').textContent = currentUser.name || 'Unknown User';
-  document.getElementById('sessionUserMeta').textContent = currentUser.role === 'head'
-    ? `${currentUser.role} ${currentUser.department_name ? `- ${currentUser.department_name}` : ''}`
-    : `${currentUser.role}${currentUser.department_name ? ` - ${currentUser.department_name}` : ''}`;
-  document.getElementById('portalLabel').textContent = currentUser.role === 'head' ? 'department head portal' : 'technician portal';
+  TechnicianPortal.configureShell(currentUser, 'tickets');
   document.getElementById('backBtn').addEventListener('click', () => {
     window.location.href = Auth.ticketListUrlFor(currentUser);
   });
@@ -33,9 +29,6 @@ function initializeShell() {
   if (currentUser.role === 'head') {
     document.getElementById('assignBtn').classList.remove('is-hidden');
     document.getElementById('closeBtn').classList.remove('is-hidden');
-    document.getElementById('navDashboard').href = '/head/dashboard.html';
-    document.getElementById('navTickets').href = '/head/tickets.html';
-    document.getElementById('navActivity').href = '/head/activity.html';
   }
 }
 

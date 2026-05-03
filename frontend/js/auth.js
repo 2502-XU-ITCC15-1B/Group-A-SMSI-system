@@ -48,9 +48,7 @@ window.Auth = (() => {
   }
 
   function ticketListUrlFor(user) {
-    return user?.role === 'head'
-      ? '/head/tickets.html'
-      : '/technician/tickets.html';
+    return '/technician/tickets.html';
   }
 
   return {
