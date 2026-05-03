@@ -1,86 +1,62 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ticket Detail</title>
   <link rel="stylesheet" href="/styles/global.css">
 </head>
 <body>
-  <div class="app-shell" id="shell"></div>
+  <div class="app-shell">
+    <div data-client-sidebar></div>
 
-  <script src="/js/config.js"></script>
+    <div class="main">
+      <div data-client-topbar></div>
+
+      <main class="content stack">
+        <section class="card stack">
+          <div id="ticketDetail">
+            <div class="empty-state">Loading ticket details...</div>
+          </div>
+        </section>
+
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Conversation</h2>
+            <p class="section-subtitle">Message history between your team and support.</p>
+          </div>
+
+          <div id="responsesList" class="responses-list">
+            <div class="empty-state">Loading responses...</div>
+          </div>
+        </section>
+
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Add Response</h2>
+            <p class="section-subtitle">Reply to keep the support thread moving.</p>
+          </div>
+
+          <form id="responseForm" class="stack">
+            <div class="field">
+              <label for="message">Message</label>
+              <textarea id="message" rows="6" required></textarea>
+            </div>
+
+            <p id="responseMessage" class="form-msg" aria-live="polite"></p>
+
+            <div class="form-actions">
+              <button class="btn" id="responseSubmitBtn" type="submit">Send Response</button>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+  </div>
+
   <script src="/js/api.js"></script>
-  <script src="/js/session.js"></script>
-  <script src="/js/layout.js"></script>
   <script src="/js/utils.js"></script>
-  <script>
-    AppSession.requireRole(['client']);
-
-    const params = new URLSearchParams(location.search);
-    const id = params.get('id');
-
-    document.getElementById('shell').innerHTML = `
-      ${AppLayout.sidebar('client', 'My Requests')}
-      <div class="main">
-        ${AppLayout.topbar(['Home', 'My Requests', 'Ticket Detail'])}
-        <div class="content">
-          <section class="card" id="detailCard"></section>
-
-          <section class="card" style="margin-top:16px">
-            <h2>Responses</h2>
-            <div id="responses"></div>
-          </section>
-
-          <section class="card" style="margin-top:16px" id="feedbackCard" hidden>
-            <h2>Feedback</h2>
-            <form id="feedbackForm">
-              <div class="field">
-                <label>Your Feedback</label>
-                <textarea name="feedback" rows="5" required></textarea>
-              </div>
-              <div class="field" style="margin-top:12px">
-                <label>Rating</label>
-                <select name="rating">
-                  <option value="">Select</option>
-                  <option value="5">5</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option>
-                </select>
-              </div>
-              <button class="btn" type="submit" style="margin-top:12px">Submit Feedback</button>
-            </form>
-          </section>
-        </div>
-      </div>
-    `;
-
-    (async () => {
-      const ticket = (await AppApi.tickets.get(id)).ticket;
-      const responses = (await AppApi.tickets.responses(id)).responses || [];
-
-      document.getElementById('detailCard').innerHTML = `
-        <h1>${ticket.work_order_id}</h1>
-        <p><strong>Title:</strong> ${ticket.title}</p>
-        <p><strong>Status:</strong> <span class="badge ${statusClass(ticket.status)}">${ticket.status}</span></p>
-        <p><strong>Priority:</strong> ${ticket.priority}</p>
-        <p><strong>Created:</strong> ${formatDateTime(ticket.created_at)}</p>
-        <p><strong>Description:</strong><br>${ticket.description || '-'}</p>
-      `;
-
-      document.getElementById('responses').innerHTML = responses.length
-        ? responses.map(r => `<div class="card" style="margin-top:12px"><strong>${r.author_name}</strong><div style="color:var(--muted);font-size:12px">${formatDateTime(r.created_at)}</div><p>${r.message}</p></div>`).join('')
-        : '<p style="color:var(--muted)">No responses yet.</p>';
-
-      if (['Resolved', 'Closed'].includes(ticket.status)) {
-        document.getElementById('feedbackCard').hidden = false;
-
-        document.getElementById('feedbackForm').addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const payload = Object.fromEntries(new FormData(e.target).entries());
-          await AppApi.tickets.addFeedback(id, payload);
-          alert('Feedback submitted.');
-        });
-      }
-    })();
-  </script>
+  <script src="/js/client.js"></script>
+  <script src="/client/ticket-detail.js"></script>
 </body>
 </html>

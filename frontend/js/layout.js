@@ -20,8 +20,7 @@ window.AppLayout = {
     const items = {
       client: [
         ['dashboard', 'Dashboard', '/client/dashboard.html'],
-        ['add_box', 'Submit Ticket', '/client/submit-ticket.html'],
-        ['list_alt', 'My Requests', '/client/my-requests.html'],
+        ['list_alt', 'My Requests', '/client/requests.html'],
         ['person', 'Profile', '/client/profile.html']
       ],
       technician: [

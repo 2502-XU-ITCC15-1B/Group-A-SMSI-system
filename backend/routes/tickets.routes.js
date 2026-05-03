@@ -157,11 +157,11 @@ router.patch('/:id/close', authenticate, authorize('admin', 'head'), async (req,
 // Roles: admin, head, technician
 // Body: { message }
 // → add response to ticket
-router.post('/:id/responses', authenticate, authorize('admin', 'head', 'technician'), async (req, res) => {
+router.post('/:id/responses', authenticate, authorize('admin', 'head', 'technician', 'client'), async (req, res) => {
   try {
     const result = await ticketService.addResponse(
       req.params.id,
-      req.body,
+      req.user.role === 'client' ? { ...req.body, internal_note: false } : req.body,
       req.user
     );
 

@@ -15,9 +15,12 @@ const SALT_ROUNDS = 10;
 const getAll = async (filters = {}) => {
   let query = `
     SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at,
-           c.name AS company_name
+           u.company_id, u.department_id,
+           c.name AS company_name,
+           d.name AS department_name
     FROM users u
     LEFT JOIN companies c ON c.id = u.company_id
+    LEFT JOIN departments d ON d.id = u.department_id
     WHERE 1=1
   `;
 
@@ -33,6 +36,16 @@ const getAll = async (filters = {}) => {
     vals.push(filters.company_id);
   }
 
+  if (filters.department_id) {
+    query += ' AND u.department_id = ?';
+    vals.push(filters.department_id);
+  }
+
+  if (filters.search) {
+    query += ' AND (u.name LIKE ? OR u.email LIKE ?)';
+    vals.push(`%${filters.search}%`, `%${filters.search}%`);
+  }
+
   query += ' ORDER BY u.created_at DESC';
 
   const [rows] = await pool.query(query, vals);
@@ -44,9 +57,12 @@ const getAll = async (filters = {}) => {
 const getById = async (id) => {
   const [rows] = await pool.query(
     `SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at,
-            u.company_id, c.name AS company_name
+            u.company_id, u.department_id,
+            c.name AS company_name,
+            d.name AS department_name
      FROM users u
      LEFT JOIN companies c ON c.id = u.company_id
+     LEFT JOIN departments d ON d.id = u.department_id
      WHERE u.id = ?`,
     [id]
   );
@@ -62,14 +78,16 @@ const getById = async (id) => {
 // Returns technicians with active ticket count
 const getTechnicians = async () => {
   const [rows] = await pool.query(
-    `SELECT u.id, u.name, u.email,
+    `SELECT u.id, u.name, u.email, u.department_id,
+            d.name AS department_name,
             COUNT(t.id) AS active_tickets
      FROM users u
+     LEFT JOIN departments d ON d.id = u.department_id
      LEFT JOIN tickets t
        ON t.technician_id = u.id
       AND t.status NOT IN ('Resolved', 'Closed')
      WHERE u.role = 'technician' AND u.is_active = 1
-     GROUP BY u.id
+     GROUP BY u.id, d.name
      ORDER BY active_tickets ASC, u.name ASC`
   );
 
@@ -78,7 +96,7 @@ const getTechnicians = async () => {
 
 // ── create ───────────────────────────────────────────────
 // Creates a new user (admin action)
-const create = async ({ name, email, password, role, company_id }, adminId) => {
+const create = async ({ name, email, password, role, company_id, department_id }, adminId) => {
   const [existing] = await pool.query(
     'SELECT id FROM users WHERE email = ? LIMIT 1',
     [email]
@@ -95,9 +113,9 @@ const create = async ({ name, email, password, role, company_id }, adminId) => {
   const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
 
   const [result] = await pool.query(
-    `INSERT INTO users (name, email, password_hash, role, company_id, is_active)
-     VALUES (?, ?, ?, ?, ?, 1)`,
-    [name, email, password_hash, role, company_id || null]
+    `INSERT INTO users (name, email, password_hash, role, company_id, department_id, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, 1)`,
+    [name, email, password_hash, role, company_id || null, department_id || null]
   );
 
   await logService.record({
@@ -111,7 +129,8 @@ const create = async ({ name, email, password, role, company_id }, adminId) => {
     name,
     email,
     role,
-    company_id: company_id || null
+    company_id: company_id || null,
+    department_id: department_id || null
   };
 };
 
@@ -123,9 +142,17 @@ const update = async (id, data, adminId) => {
      SET name = COALESCE(?, name),
          email = COALESCE(?, email),
          role = COALESCE(?, role),
-         company_id = COALESCE(?, company_id)
+         company_id = COALESCE(?, company_id),
+         department_id = COALESCE(?, department_id)
      WHERE id = ?`,
-    [data.name || null, data.email || null, data.role || null, data.company_id ?? null, id]
+    [
+      data.name || null,
+      data.email || null,
+      data.role || null,
+      data.company_id ?? null,
+      data.department_id ?? null,
+      id
+    ]
   );
 
   if (result.affectedRows === 0) {

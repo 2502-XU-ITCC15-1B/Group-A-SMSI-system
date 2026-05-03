@@ -1,110 +1,21 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Submit Ticket</title>
+  <meta http-equiv="refresh" content="0; url=/client/dashboard.html?newTicket=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Redirecting</title>
   <link rel="stylesheet" href="/styles/global.css">
 </head>
 <body>
-  <div class="modal open">
-    <div class="modal-panel">
-      <div class="modal-head">
-        <div>
-          <h1>Submit a Request</h1>
-          <p style="color:var(--muted)">Create a new support ticket for your company.</p>
-        </div>
-        <a class="btn secondary" href="/client/dashboard.html">Close</a>
-      </div>
-
-      <div class="modal-body">
-        <div class="card" id="contextCard" style="margin-bottom:16px"></div>
-
-        <form id="ticketForm" class="space-y-lg">
-          <div class="form-row">
-            <div class="field">
-              <label>Ticket Title</label>
-              <input name="title" required placeholder="Brief summary">
-            </div>
-            <div class="field">
-              <label>Priority</label>
-              <select name="priority" required>
-                <option value="Low">Low</option>
-                <option value="Medium" selected>Medium</option>
-                <option value="High">High</option>
-                <option value="Critical">Critical</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="field">
-            <label>Category</label>
-            <select name="category" required>
-              <option value="">Select category</option>
-              <option>Hardware</option>
-              <option>Software</option>
-              <option>Network</option>
-              <option>Account</option>
-              <option>Other</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>Description</label>
-            <textarea name="description" rows="8" required placeholder="Describe the issue"></textarea>
-          </div>
-
-          <div style="display:flex;justify-content:flex-end;gap:12px">
-            <a class="btn secondary" href="/client/dashboard.html">Cancel</a>
-            <button class="btn" type="submit">Submit Ticket</button>
-          </div>
-        </form>
-
-        <p id="ticketMsg" style="margin-top:12px;color:var(--muted)"></p>
-      </div>
+  <main class="content">
+    <div class="card">
+      <p>Redirecting to the dashboard ticket form...</p>
     </div>
-  </div>
+  </main>
 
-  <script src="/js/config.js"></script>
-  <script src="/js/api.js"></script>
-  <script src="/js/session.js"></script>
-  <script src="/js/utils.js"></script>
   <script>
-    AppSession.requireRole(['client']);
-
-    const user = AppSession.getUser();
-    document.getElementById('contextCard').innerHTML = `
-      <div class="form-row">
-        <div>
-          <div style="color:var(--muted);font-size:12px">Requesting User</div>
-          <strong>${user?.name || ''}</strong>
-        </div>
-        <div>
-          <div style="color:var(--muted);font-size:12px">Company</div>
-          <strong>${user?.company_name || 'Assigned by backend'}</strong>
-        </div>
-      </div>
-    `;
-
-    document.getElementById('ticketForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = Object.fromEntries(new FormData(e.target).entries());
-      const msg = document.getElementById('ticketMsg');
-
-      try {
-        const res = await AppApi.tickets.create({
-          title: formData.title,
-          description: formData.description,
-          priority: formData.priority,
-          category: formData.category
-        });
-
-        msg.textContent = `Ticket created: ${res.ticket?.work_order_id || res.work_order_id || 'OK'}`;
-        setTimeout(() => window.location.href = '/client/my-requests.html', 800);
-      } catch (err) {
-        msg.textContent = err.message;
-      }
-    });
+    window.location.replace('/client/dashboard.html?newTicket=1');
   </script>
 </body>
 </html>

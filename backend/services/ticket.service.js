@@ -287,6 +287,8 @@ const addResponse = async (ticketId, data, user) => {
     throw { status: 400, message: 'Message is required.' };
   }
 
+  await getById(ticketId, user);
+
   await pool.query(
     `INSERT INTO ticket_responses (ticket_id, user_id, message, internal_note)
      VALUES (?, ?, ?, ?)`,

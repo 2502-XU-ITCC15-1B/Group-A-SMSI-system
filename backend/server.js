@@ -13,6 +13,8 @@ const userRoutes       = require('./routes/users.routes');
 const companyRoutes    = require('./routes/companies.routes');
 const departmentRoutes = require('./routes/departments.routes'); 
 const logRoutes        = require('./routes/logs.routes');
+const profileRoutes    = require('./routes/profile.routes');
+const adminRoutes      = require('./routes/admin.routes');
  
 // ── App setup ──────────────────────────────────────────────
 const app = express();
@@ -44,6 +46,9 @@ app.use('/api/users',       userRoutes);
 app.use('/api/companies',   companyRoutes);
 app.use('/api/departments', departmentRoutes); 
 app.use('/api/logs',        logRoutes);
+app.use('/api/profile',     profileRoutes);
+app.use('/api/admin',       adminRoutes);
+app.use('/api',             adminRoutes);
  
 // ── 404 handler — unknown API routes ──────────────────────
 app.use('/api/*', (req, res) => {

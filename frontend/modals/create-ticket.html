@@ -1,0 +1,39 @@
+<div id="ticketModal" class="modal">
+  <div class="modal-panel">
+
+    <div class="modal-head">
+      <div>
+        <h2>Submit Ticket</h2>
+        <p>Create a new support request</p>
+      </div>
+      <button onclick="closeModal()">X</button>
+    </div>
+
+    <div class="modal-body">
+
+      <div class="field">
+        <label>Title</label>
+        <input id="title">
+      </div>
+
+      <div class="field">
+        <label>Priority</label>
+        <select id="priority">
+          <option>Low</option>
+          <option>Medium</option>
+          <option>High</option>
+          <option>Critical</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Description</label>
+        <textarea id="description"></textarea>
+      </div>
+
+      <button class="btn" onclick="submitTicket()">Submit</button>
+
+    </div>
+
+  </div>
+</div>

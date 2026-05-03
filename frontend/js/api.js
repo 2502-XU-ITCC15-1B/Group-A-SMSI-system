@@ -1,190 +1,366 @@
 // ============================================================
-// Centralized API client for the WOMAN frontend.
-// All fetch() calls go through this file.
-//
-// Auth flow:
-//   1. login()  → stores the JWT in sessionStorage
-//   2. All other calls automatically attach the Bearer token
-//   3. logout() → clears sessionStorage and redirects to login
+// Centralized API client for WOMAN frontend
+// Fully aligned with backend routes/services
 // ============================================================
 
- const API_BASE_URL = window.API_BASE_URL;
+const apiBaseUrl = window.API_BASE_URL || 'http://localhost:5000/api';
 
-// ── Token helpers ──────────────────────────────────────────
-const getToken = ()       => sessionStorage.getItem('woman_token');
-const getUser  = ()       => JSON.parse(sessionStorage.getItem('woman_user') || 'null');
-const saveSession = (token, user) => {
-  sessionStorage.setItem('woman_token',  token);
-  sessionStorage.setItem('woman_user',   JSON.stringify(user));
-  sessionStorage.setItem('woman_role',   user.role);
+/* ===========================================================
+   SESSION HANDLING
+=========================================================== */
+const getToken = () => sessionStorage.getItem('woman_token');
+
+const getUser = () => {
+  try {
+    return JSON.parse(sessionStorage.getItem('woman_user'));
+  } catch {
+    return null;
+  }
 };
- 
-// ── Core request wrapper ───────────────────────────────────
-// Automatically adds Content-Type and Authorization headers.
-// Redirects to login.html on 401 Unauthorized.
+
+const saveSession = (token, user) => {
+  sessionStorage.setItem('woman_token', token);
+  sessionStorage.setItem('woman_user', JSON.stringify(user));
+  sessionStorage.setItem('woman_role', user.role);
+};
+
+function logout() {
+  sessionStorage.clear();
+  window.location.href = '/login.html';
+}
+
+/* ===========================================================
+   CORE REQUEST WRAPPER
+=========================================================== */
 async function apiRequest(path, options = {}) {
   const token = getToken();
- 
+
   const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {})
   };
- 
+
   try {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await fetch(`${apiBaseUrl}${path}`, {
       ...options,
       headers
     });
- 
-    // Auto-logout on expired/invalid token
+
+    const data = await res.json().catch(() => ({}));
+
     if (res.status === 401) {
       logout();
       return null;
     }
- 
-    return await res.json();
- 
+
+    if (!res.ok) {
+      return {
+        success: false,
+        message: data.message || 'Request failed'
+      };
+    }
+
+    return data;
+
   } catch (err) {
-    console.error(`[API] Request failed — ${path}:`, err.message);
-    return { success: false, message: 'Connection error. Is the server running?' };
+    console.error('[API ERROR]', path, err);
+    return {
+      success: false,
+      message: 'Network error. Backend unreachable.'
+    };
   }
 }
- 
-// ── AUTH ───────────────────────────────────────────────────
- 
-// login({ email, password })
-// Returns { success, token, user } or { success: false, message }
+
+/* ===========================================================
+   AUTH
+=========================================================== */
 async function login({ email, password }) {
-  const data = await apiRequest('/auth/login', {
+  const res = await apiRequest('/auth/login', {
     method: 'POST',
-    body:   JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password })
   });
- 
-  if (data?.success) {
-    saveSession(data.token, data.user);
+
+  if (res?.success) {
+    saveSession(res.token, res.user);
   }
- 
-  return data;
+
+  return res;
 }
- 
-// logout() — clears local session and redirects
-function logout() {
-  sessionStorage.clear();
-  window.location.href = 'login.html';
-}
- 
-// getMe() — fetch the current user's profile from the server
+
 async function getMe() {
-  return await apiRequest('/auth/me');
+  const res = await apiRequest('/auth/me');
+  return res?.user || null;
 }
- 
-// ── TICKETS ────────────────────────────────────────────────
- 
-// fetchTickets(filters)  e.g. fetchTickets({ status: 'Open', company_id: 1 })
+
+async function updateProfile(data) {
+  return await apiRequest('/profile', {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+}
+
+async function changePassword(payload) {
+  return await apiRequest('/profile/password', {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+}
+
+async function forgotPassword(email) {
+  return await apiRequest('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  });
+}
+
+async function resetPassword(token, new_password) {
+  return await apiRequest('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, new_password })
+  });
+}
+
+/* ===========================================================
+   TICKETS
+=========================================================== */
 async function fetchTickets(filters = {}) {
   const params = new URLSearchParams(filters).toString();
-  const path   = `/tickets${params ? '?' + params : ''}`;
-  const data   = await apiRequest(path);
-  return data?.tickets || [];
+  const res = await apiRequest(`/tickets${params ? '?' + params : ''}`);
+  return res?.tickets || [];
 }
- 
-// fetchTicket(id) — single ticket with full detail
+
+async function fetchMyTickets() {
+  const res = await apiRequest('/tickets/mine');
+  return res?.tickets || [];
+}
+
 async function fetchTicket(id) {
-  const data = await apiRequest(`/tickets/${id}`);
-  return data?.ticket || null;
+  const res = await apiRequest(`/tickets/${id}`);
+  return res?.ticket || null;
 }
- 
-// createTicket({ title, description, priority, company_id? })
+
 async function createTicket(payload) {
   return await apiRequest('/tickets', {
     method: 'POST',
-    body:   JSON.stringify(payload)
+    body: JSON.stringify(payload)
   });
 }
- 
-// updateTicketStatus(id, status)
+
+async function updateTicket(id, payload) {
+  return await apiRequest(`/tickets/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+}
+
 async function updateTicketStatus(id, status) {
   return await apiRequest(`/tickets/${id}/status`, {
     method: 'PATCH',
-    body:   JSON.stringify({ status })
+    body: JSON.stringify({ status })
   });
 }
- 
-// assignTicket(ticketId, technicianId)
-async function assignTicket(ticketId, technicianId) {
-  return await apiRequest(`/tickets/${ticketId}/assign`, {
+
+async function assignTicket(id, payload) {
+  return await apiRequest(`/tickets/${id}/assign`, {
     method: 'PATCH',
-    body:   JSON.stringify({ technician_id: technicianId })
+    body: JSON.stringify(payload)
   });
 }
- 
-// ── RESPONSES ──────────────────────────────────────────────
- 
-// fetchResponses(ticketId)
-async function fetchResponses(ticketId) {
-  const data = await apiRequest(`/tickets/${ticketId}/responses`);
-  return data?.responses || [];
+
+async function closeTicket(id) {
+  return await apiRequest(`/tickets/${id}/close`, {
+    method: 'PATCH'
+  });
 }
- 
-// submitResponse(ticketId, message)
-async function submitResponse(ticketId, message) {
+
+async function deleteTicket(id) {
+  return await apiRequest(`/tickets/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+/* ===========================================================
+   RESPONSES / COMMENTS
+=========================================================== */
+async function fetchResponses(ticketId) {
+  const res = await apiRequest(`/tickets/${ticketId}/responses`);
+  return res?.responses || [];
+}
+
+async function submitResponse(ticketId, message, internal_note = false) {
   return await apiRequest(`/tickets/${ticketId}/responses`, {
     method: 'POST',
-    body:   JSON.stringify({ message })
+    body: JSON.stringify({ message, internal_note })
   });
 }
- 
-// ── USERS (admin only) ─────────────────────────────────────
+
+async function submitFeedback(ticketId, rating, feedback) {
+  return await apiRequest(`/tickets/${ticketId}/feedback`, {
+    method: 'POST',
+    body: JSON.stringify({ rating, feedback })
+  });
+}
+
+/* ===========================================================
+   USERS (ADMIN)
+=========================================================== */
 async function fetchUsers(filters = {}) {
   const params = new URLSearchParams(filters).toString();
-  const data   = await apiRequest(`/users${params ? '?' + params : ''}`);
-  return data?.users || [];
+  const res = await apiRequest(`/users${params ? '?' + params : ''}`);
+  return res?.users || [];
 }
- 
+
+async function fetchUser(id) {
+  const res = await apiRequest(`/users/${id}`);
+  return res?.user || null;
+}
+
 async function fetchTechnicians() {
-  const data = await apiRequest('/users/technicians');
-  return data?.technicians || [];
+  const res = await apiRequest('/users/technicians');
+  return res?.users || [];
 }
- 
+
 async function createUser(payload) {
-  return await apiRequest('/users', { method: 'POST', body: JSON.stringify(payload) });
+  return await apiRequest('/users', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
 }
- 
-// ── COMPANIES (admin only) ─────────────────────────────────
+
+async function updateUser(id, payload) {
+  return await apiRequest(`/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+}
+
+async function updateUserStatus(id, is_active) {
+  return await apiRequest(`/users/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_active })
+  });
+}
+
+async function resetUserPassword(id, password) {
+  return await apiRequest(`/users/${id}/password`, {
+    method: 'PATCH',
+    body: JSON.stringify({ password })
+  });
+}
+
+async function deleteUser(id) {
+  return await apiRequest(`/users/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+/* ===========================================================
+   COMPANIES
+=========================================================== */
 async function fetchCompanies() {
-  const data = await apiRequest('/companies');
-  return data?.companies || [];
+  const res = await apiRequest('/companies');
+  return res?.companies || [];
 }
- 
+
+async function fetchCompany(id) {
+  const res = await apiRequest(`/companies/${id}`);
+  return res?.company || null;
+}
+
 async function createCompany(payload) {
-  return await apiRequest('/companies', { method: 'POST', body: JSON.stringify(payload) });
+  return await apiRequest('/companies', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
 }
- 
-// ── LOGS (admin / technician) ──────────────────────────────
+
+async function updateCompany(id, payload) {
+  return await apiRequest(`/companies/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+}
+
+async function deleteCompany(id) {
+  return await apiRequest(`/companies/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+/* ===========================================================
+   DEPARTMENTS
+=========================================================== */
+async function fetchDepartments() {
+  const res = await apiRequest('/departments');
+  return res?.departments || [];
+}
+
+async function fetchDepartment(id) {
+  const res = await apiRequest(`/departments/${id}`);
+  return res?.department || null;
+}
+
+async function createDepartment(payload) {
+  return await apiRequest('/departments', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+async function updateDepartment(id, payload) {
+  return await apiRequest(`/departments/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+}
+
+async function deleteDepartment(id) {
+  return await apiRequest(`/departments/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+/* ===========================================================
+   LOGS
+=========================================================== */
 async function fetchLogs(filters = {}) {
   const params = new URLSearchParams(filters).toString();
-  const data   = await apiRequest(`/logs${params ? '?' + params : ''}`);
-  return data?.logs || [];
+  const res = await apiRequest(`/logs${params ? '?' + params : ''}`);
+  return res?.logs || [];
 }
- 
+
 async function fetchTicketLogs(ticketId) {
-  const data = await apiRequest(`/logs/ticket/${ticketId}`);
-  return data?.logs || [];
+  const res = await apiRequest(`/logs/ticket/${ticketId}`);
+  return res?.logs || [];
 }
- 
-// ── Guard helper (call at top of each protected page) ──────
-// Usage:  requireRole('admin') or requireRole('admin','technician')
-function requireRole(...allowedRoles) {
+
+/* ===========================================================
+   ROLE GUARD
+=========================================================== */
+function requireRole(...roles) {
   const user = getUser();
+
   if (!user) {
-    window.location.href = 'login.html';
+    window.location.href = '/login.html';
     return false;
   }
-  if (!allowedRoles.includes(user.role)) {
-    alert('⚠️ Access denied. You do not have permission to view this page.');
+
+  if (!roles.includes(user.role)) {
+    alert('Access denied.');
     history.back();
     return false;
   }
+
   return true;
+}
+
+async function apiFetch(path, options = {}) {
+  const normalized = { ...options };
+
+  if (normalized.body && !(normalized.body instanceof FormData) && typeof normalized.body !== 'string') {
+    normalized.body = JSON.stringify(normalized.body);
+  }
+
+  return apiRequest(path, normalized);
 }

@@ -42,6 +42,41 @@ router.get('/me', authenticate, async (req, res) => {
   }
 });
 
+// PUT /api/auth/me
+// Body: { name, email }
+// Updates the currently logged-in user's profile.
+router.put('/me', authenticate, async (req, res) => {
+  try {
+    const user = await authService.updateMe(req.user.id, req.body);
+    res.json({ success: true, message: 'Profile updated successfully.', user });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
+
+// PUT /api/auth/change-password
+// Body: { current_password, new_password }
+// Changes the currently logged-in user's password.
+router.put('/change-password', authenticate, async (req, res) => {
+  try {
+    const result = await authService.changePassword(
+      req.user.id,
+      req.body.current_password,
+      req.body.new_password
+    );
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
+
 // POST /api/auth/forgot-password
 // Body: { email }
 // Sends password reset instructions/token.

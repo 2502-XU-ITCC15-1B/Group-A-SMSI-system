@@ -1,96 +1,97 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Client Profile</title>
   <link rel="stylesheet" href="/styles/global.css">
 </head>
 <body>
-  <div class="app-shell" id="shell"></div>
+  <div class="app-shell">
+    <div data-client-sidebar></div>
 
-  <script src="/js/config.js"></script>
-  <script src="/js/api.js"></script>
-  <script src="/js/session.js"></script>
-  <script src="/js/layout.js"></script>
-  <script src="/js/utils.js"></script>
-  <script>
-    AppSession.requireRole(['client']);
+    <div class="main">
+      <div data-client-topbar></div>
 
-    document.getElementById('shell').innerHTML = `
-      ${AppLayout.sidebar('client', 'Profile')}
-      <div class="main">
-        ${AppLayout.topbar(['Home', 'Profile'])}
-        <div class="content">
-          <section class="card">
-            <h1>Profile Settings</h1>
-            <p style="color:var(--muted)">Manage your personal information and account security.</p>
-          </section>
-
-          <div class="grid-3" style="grid-template-columns:2fr 1fr;gap:16px;margin-top:16px">
-            <section class="card">
-              <h2>Personal Information</h2>
-              <form id="profileForm">
-                <div class="form-row" style="margin-top:12px">
-                  <div class="field">
-                    <label>Full Name</label>
-                    <input name="name" id="name" required>
-                  </div>
-                  <div class="field">
-                    <label>Email Address</label>
-                    <input name="email" id="email" type="email" required>
-                  </div>
-                </div>
-                <button class="btn" type="submit" style="margin-top:12px">Save Changes</button>
-              </form>
-
-              <hr style="margin:20px 0;border:none;border-top:1px solid var(--line)">
-
-              <h2>Security</h2>
-              <form id="passwordForm">
-                <div class="form-row" style="margin-top:12px">
-                  <div class="field">
-                    <label>Current Password</label>
-                    <input name="current_password" type="password" required>
-                  </div>
-                  <div class="field">
-                    <label>New Password</label>
-                    <input name="new_password" type="password" required>
-                  </div>
-                </div>
-                <button class="btn secondary" type="submit" style="margin-top:12px">Update Password</button>
-              </form>
-            </section>
-
-            <aside class="card">
-              <h2>Account Details</h2>
-              <div id="accountMeta" style="color:var(--muted)"></div>
-            </aside>
+      <main class="content stack">
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Personal Information</h2>
+            <p class="section-subtitle">Maintain the contact details used for support communication.</p>
           </div>
-        </div>
-      </div>
-    `;
 
-    (async () => {
-      const me = (await AppApi.auth.me()).user;
-      document.getElementById('name').value = me.name || '';
-      document.getElementById('email').value = me.email || '';
-      document.getElementById('accountMeta').innerHTML = `
-        <p><strong>Role:</strong> ${me.role}</p>
-        <p><strong>Company:</strong> ${me.company_name || '-'}</p>
-      `;
-    })();
+          <form id="profileForm" class="stack">
+            <div class="form-row">
+              <div class="field">
+                <label for="name">Name</label>
+                <input id="name" type="text" required>
+              </div>
 
-    document.getElementById('profileForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const payload = Object.fromEntries(new FormData(e.target).entries());
-      alert('Profile update endpoint should be wired to PUT /api/users/me in the next backend pass.');
-    });
+              <div class="field">
+                <label for="email">Email</label>
+                <input id="email" type="email" required>
+              </div>
+            </div>
 
-    document.getElementById('passwordForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      alert('Password update should be wired to the auth/profile endpoint in the next backend pass.');
-    });
-  </script>
+            <p id="profileMessage" class="form-msg" aria-live="polite"></p>
+
+            <div class="form-actions">
+              <button class="btn" id="saveProfileBtn" type="submit">Save Changes</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Security</h2>
+            <p class="section-subtitle">Update your password to keep the account secure.</p>
+          </div>
+
+          <form id="passwordForm" class="stack">
+            <div class="form-row">
+              <div class="field">
+                <label for="currentPassword">Current Password</label>
+                <input id="currentPassword" type="password" required>
+              </div>
+
+              <div class="field">
+                <label for="newPassword">New Password</label>
+                <input id="newPassword" type="password" minlength="8" required>
+              </div>
+            </div>
+
+            <p id="passwordMessage" class="form-msg" aria-live="polite"></p>
+
+            <div class="form-actions">
+              <button class="btn secondary" id="changePasswordBtn" type="submit">Update Password</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Account Details</h2>
+            <p class="section-subtitle">Read-only information tied to your client account.</p>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="role">Role</label>
+              <input id="role" type="text" readonly>
+            </div>
+
+            <div class="field">
+              <label for="company">Company</label>
+              <input id="company" type="text" readonly>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/client.js"></script>
+  <script src="/client/profile.js"></script>
 </body>
 </html>

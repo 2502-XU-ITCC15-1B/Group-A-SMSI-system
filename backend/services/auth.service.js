@@ -19,7 +19,7 @@ const JWT_EXPIRES = process.env.JWT_EXPIRES || '8h';   // token lifetime
 const login = async (email, password) => {
   // 1. Look up the user by email
   const [rows] = await pool.query(
-    `SELECT id, name, email, role, company_id, password_hash, is_active
+    `SELECT id, name, email, role, company_id, department_id, password_hash, is_active
      FROM users
      WHERE email = ? AND is_active = 1
      LIMIT 1`,
@@ -44,7 +44,8 @@ const login = async (email, password) => {
     name:       user.name,
     email:      user.email,
     role:       user.role,
-    company_id: user.company_id
+    company_id: user.company_id,
+    department_id: user.department_id
   };
 
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
@@ -63,10 +64,12 @@ const login = async (email, password) => {
 // Returns fresh user data for the authenticated user.
 const getMe = async (userId) => {
   const [rows] = await pool.query(
-    `SELECT u.id, u.name, u.email, u.role, u.company_id, u.created_at, u.is_active,
-            c.name AS company_name
+    `SELECT u.id, u.name, u.email, u.role, u.company_id, u.department_id, u.created_at, u.is_active,
+            c.name AS company_name,
+            d.name AS department_name
      FROM users u
      LEFT JOIN companies c ON c.id = u.company_id
+     LEFT JOIN departments d ON d.id = u.department_id
      WHERE u.id = ?`,
     [userId]
   );
@@ -76,6 +79,86 @@ const getMe = async (userId) => {
   }
 
   return rows[0];
+};
+
+// Updates the authenticated user's basic profile fields.
+const updateMe = async (userId, data) => {
+  const name = (data.name || '').trim();
+  const email = (data.email || '').trim();
+
+  if (!name || !email) {
+    throw { status: 400, message: 'Name and email are required.' };
+  }
+
+  const [existing] = await pool.query(
+    'SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1',
+    [email, userId]
+  );
+
+  if (existing.length > 0) {
+    throw { status: 409, message: 'A user with that email already exists.' };
+  }
+
+  const [result] = await pool.query(
+    `UPDATE users
+     SET name = ?, email = ?
+     WHERE id = ?`,
+    [name, email, userId]
+  );
+
+  if (result.affectedRows === 0) {
+    throw { status: 404, message: 'User not found.' };
+  }
+
+  await logService.record({
+    userId,
+    action: 'PROFILE_UPDATED',
+    details: 'User updated their profile.'
+  });
+
+  return getMe(userId);
+};
+
+// Changes the authenticated user's password.
+const changePassword = async (userId, currentPassword, newPassword) => {
+  if (!currentPassword || !newPassword) {
+    throw { status: 400, message: 'Current and new passwords are required.' };
+  }
+
+  if (newPassword.length < 8) {
+    throw { status: 400, message: 'New password must be at least 8 characters.' };
+  }
+
+  const [rows] = await pool.query(
+    'SELECT id, password_hash FROM users WHERE id = ? LIMIT 1',
+    [userId]
+  );
+
+  if (rows.length === 0) {
+    throw { status: 404, message: 'User not found.' };
+  }
+
+  const user = rows[0];
+  const isValid = await bcrypt.compare(currentPassword, user.password_hash);
+
+  if (!isValid) {
+    throw { status: 401, message: 'Current password is incorrect.' };
+  }
+
+  const password_hash = await bcrypt.hash(newPassword, 10);
+
+  await pool.query(
+    'UPDATE users SET password_hash = ? WHERE id = ?',
+    [password_hash, userId]
+  );
+
+  await logService.record({
+    userId,
+    action: 'PASSWORD_CHANGED',
+    details: 'User changed their password.'
+  });
+
+  return { message: 'Password updated successfully.' };
 };
 
 // ── requestPasswordReset ─────────────────────────────────
@@ -165,6 +248,8 @@ const resetPassword = async (token, newPassword) => {
 module.exports = {
   login,
   getMe,
+  updateMe,
+  changePassword,
   requestPasswordReset,
   resetPassword
 };
