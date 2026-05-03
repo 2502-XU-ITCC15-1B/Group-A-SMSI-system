@@ -1,25 +1,90 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>SMSI - Login</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-    <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0px 0px 10px rgba(0,0,0,0.1); text-align: center;">
-        <h2>SMSI Login</h2>
-        <br>
-        <input type="text" id="username" placeholder="Username" style="display: block; width: 100%; margin-bottom: 10px; padding: 10px;">
-        
-        <input type="password" id="accessCode" placeholder="Access Code" style="display: block; width: 100%; margin-bottom: 20px; padding: 10px;">
-        
-        <button onclick="loginVerify()" class="btn" style="display: inline-block; width: 100%; cursor: pointer; border: none; padding: 10px;">Login</button>
-    </div>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - SMSi</title>
 
-    <script src="script.js"></script>
+<link rel="stylesheet" href="styles/global.css">
+<script src="js/api.js"></script>
+<script src="js/config.js"></script>
+</head>
+
+<body>
+
+<div class="auth-shell">
+
+  <!-- LEFT PANEL -->
+  <section class="auth-left">
+    <div class="auth-brand">
+      <h1>SMSi</h1>
+      <p>Enterprise Ticketing & Support Infrastructure</p>
+    </div>
+  </section>
+
+  <!-- RIGHT PANEL -->
+  <section class="auth-right">
+    <div class="auth-card">
+
+      <h2 class="auth-title">Sign In</h2>
+      <p class="auth-subtitle">Enter your credentials to access the system</p>
+
+      <form id="loginForm">
+
+        <div class="auth-field">
+          <label class="auth-label">Email Address</label>
+          <input class="auth-input" id="email" type="email" required>
+        </div>
+
+        <div class="auth-field">
+          <div class="auth-row">
+            <label class="auth-label">Password</label>
+            <a class="auth-link" href="forgot-password.html">Forgot password?</a>
+          </div>
+          <input class="auth-input" id="password" type="password" required>
+        </div>
+
+        <button class="auth-btn" type="submit">Sign In</button>
+
+        <div id="errorMsg" class="auth-message"></div>
+
+      </form>
+
+    </div>
+  </section>
+
+</div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value.trim();
+  const msg = document.getElementById('errorMsg');
+
+  msg.textContent = '';
+
+  const res = await login({ email, password });
+
+  if (res?.success) {
+    const role = res.user.role;
+
+    if (role === 'admin') {
+      window.location.href = 'admin/dashboard.html';
+    } else if (role === 'technician') {
+      window.location.href = 'technician/dashboard.html';
+    } else if (role === 'head') {
+      window.location.href = 'head/dashboard.html';
+    } else {
+      window.location.href = 'client/dashboard.html';
+    }
+
+  } else {
+    msg.textContent = res?.message || 'Invalid login credentials';
+  }
+});
+</script>
+
 </body>
 </html>
-
-
-

@@ -19,15 +19,27 @@ const pool = mysql.createPool({
   // ssl: { rejectUnauthorized: false }
 });
 
-// Quick health-check on startup
-pool.getConnection()
-  .then(conn => {
-    console.log('✅ MySQL pool connected to:', process.env.DB_NAME);
-    conn.release();
-  })
-  .catch(err => {
-    console.error('❌ MySQL pool connection failed:', err.message);
-    process.exit(1);   // crash fast — don't run a broken server
-  });
+// -------------------------------------------------------
+// MySQL connection retry logic (prevents crash on startup)
+// -------------------------------------------------------
+async function connectWithRetry(retries = 10) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const conn = await pool.getConnection();
+      console.log('✅ MySQL connected to:', process.env.DB_NAME);
+      conn.release();
+      return;
+    } catch (err) {
+      console.log(`⏳ MySQL not ready (${i + 1}/${retries})... retrying`);
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+
+  console.error('❌ MySQL failed after retries');
+  process.exit(1);
+}
+
+// Run DB connection check
+connectWithRetry();
 
 module.exports = pool;

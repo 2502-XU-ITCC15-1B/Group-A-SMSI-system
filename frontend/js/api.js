@@ -7,7 +7,9 @@
 //   2. All other calls automatically attach the Bearer token
 //   3. logout() → clears sessionStorage and redirects to login
 // ============================================================
- 
+
+ const API_BASE_URL = window.API_BASE_URL;
+
 // ── Token helpers ──────────────────────────────────────────
 const getToken = ()       => sessionStorage.getItem('woman_token');
 const getUser  = ()       => JSON.parse(sessionStorage.getItem('woman_user') || 'null');

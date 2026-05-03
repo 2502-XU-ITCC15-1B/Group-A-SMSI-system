@@ -30,13 +30,14 @@ services:
   # 3. Database Service
   db:
     image: mysql:8.0
-    restart: always
+    restart: no
     env_file:
       - ./backend/.env
     ports:
       - "3307:3306"
     volumes:
       - db_data:/var/lib/mysql
+      - ./backend/database.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
 
 volumes:
   db_data:

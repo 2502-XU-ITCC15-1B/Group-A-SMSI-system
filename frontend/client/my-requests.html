@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>My Requests</title>
+  <link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+  <div class="app-shell" id="shell"></div>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/session.js"></script>
+  <script src="/js/layout.js"></script>
+  <script src="/js/utils.js"></script>
+  <script>
+    AppSession.requireRole(['client']);
+
+    document.getElementById('shell').innerHTML = `
+      ${AppLayout.sidebar('client', 'My Requests')}
+      <div class="main">
+        ${AppLayout.topbar(['Home', 'My Requests'])}
+        <div class="content">
+          <section class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+              <div>
+                <h1>My Requests</h1>
+                <p style="color:var(--muted)">Track your submissions and open the ticket detail view.</p>
+              </div>
+              <a class="btn" href="/client/submit-ticket.html">+ New Request</a>
+            </div>
+
+            <div style="display:flex;gap:12px;margin:16px 0;flex-wrap:wrap">
+              <select id="statusFilter"><option value="">All Statuses</option><option>Open</option><option>Assigned</option><option>In Progress</option><option>Resolved</option><option>Closed</option></select>
+              <select id="priorityFilter"><option value="">Any Priority</option><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>WorkOrderID</th><th>Title</th><th>Status</th><th>Priority</th><th>Created Date</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="requestRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+    `;
+
+    const statusFilter = document.getElementById('statusFilter');
+    const priorityFilter = document.getElementById('priorityFilter');
+    const requestRows = document.getElementById('requestRows');
+    let allTickets = [];
+
+    async function loadTickets() {
+      const res = await AppApi.tickets.list('?scope=client');
+      allTickets = res.tickets || [];
+      renderRows();
+    }
+
+    function renderRows() {
+      const status = statusFilter.value;
+      const priority = priorityFilter.value;
+
+      const filtered = allTickets.filter(t =>
+        (!status || t.status === status) &&
+        (!priority || t.priority === priority)
+      );
+
+      requestRows.innerHTML = filtered.map(t => `
+        <tr style="cursor:pointer" onclick="window.location.href='/client/ticket-detail.html?id=${t.id}'">
+          <td>${t.work_order_id}</td>
+          <td>${t.title}</td>
+          <td><span class="badge ${statusClass(t.status)}">${t.status}</span></td>
+          <td>${t.priority}</td>
+          <td>${formatDateTime(t.created_at)}</td>
+          <td><button class="btn secondary" type="button">View</button></td>
+        </tr>
+      `).join('');
+    }
+
+    statusFilter.addEventListener('change', renderRows);
+    priorityFilter.addEventListener('change', renderRows);
+    loadTickets();
+  </script>
+</body>
+</html>

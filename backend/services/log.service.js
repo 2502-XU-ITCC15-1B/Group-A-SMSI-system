@@ -1,9 +1,10 @@
+const pool = require('../config/db');
+
+// -------------------------------------------------------
 // Writes to the activity_logs table.
 // Used internally by other services — never called directly
 // from route handlers.
 // -------------------------------------------------------
-
-const pool2 = require('../config/db');
 
 /**
  * record({ ticketId?, userId, action, details? })
@@ -12,35 +13,45 @@ const pool2 = require('../config/db');
  */
 const record = async ({ ticketId = null, userId, action, details = null }) => {
   try {
-    await pool2.query(
-      'INSERT INTO activity_logs (ticket_id, user_id, action, details) VALUES (?, ?, ?, ?)',
+    await pool.query(
+      `INSERT INTO activity_logs (ticket_id, user_id, action, details)
+       VALUES (?, ?, ?, ?)`,
       [ticketId, userId, action, details]
     );
   } catch (err) {
-    // Logging must never crash the main request flow
+    // Logging must never break the main request flow
     console.error('[LogService] Failed to write log entry:', err.message);
   }
 };
 
 // ── getAll ───────────────────────────────────────────────
-const getAll = async ({ ticketId, userId, limit = 100 } = {}) => {
-  let query  = `
+// Returns system activity logs with optional filters.
+const getAll = async ({ ticketId = null, userId = null, limit = 100 } = {}) => {
+  let sql = `
     SELECT l.*, u.name AS user_name, u.role AS user_role,
            t.work_order_id
-    FROM   activity_logs l
-    JOIN   users u    ON u.id = l.user_id
+    FROM activity_logs l
+    JOIN users u ON u.id = l.user_id
     LEFT JOIN tickets t ON t.id = l.ticket_id
-    WHERE  1=1
+    WHERE 1=1
   `;
-  const vals = [];
 
-  if (ticketId) { query += ' AND l.ticket_id = ?'; vals.push(ticketId); }
-  if (userId)   { query += ' AND l.user_id   = ?'; vals.push(userId);   }
+  const values = [];
 
-  query += ' ORDER BY l.created_at DESC LIMIT ?';
-  vals.push(limit);
+  if (ticketId) {
+    sql += ' AND l.ticket_id = ?';
+    values.push(ticketId);
+  }
 
-  const [rows] = await pool2.query(query, vals);
+  if (userId) {
+    sql += ' AND l.user_id = ?';
+    values.push(userId);
+  }
+
+  sql += ' ORDER BY l.created_at DESC LIMIT ?';
+  values.push(limit);
+
+  const [rows] = await pool.query(sql, values);
   return rows;
 };
 
