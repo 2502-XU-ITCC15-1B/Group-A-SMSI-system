@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     title: 'Dashboard',
     subtitle: 'Track your support activity and create new requests.',
     breadcrumbs: ['Client Portal', 'Dashboard'],
-    actionsHtml: '<button class="btn" type="button" data-open-ticket-modal>New Ticket</button>'
+    actionsHtml: `<button class="btn" type="button" data-open-ticket-modal>${ClientPortal.icon('plus')}New Ticket</button>`
   });
 
   ClientPortal.ensureTicketModal({

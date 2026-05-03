@@ -1,4 +1,11 @@
 window.TechnicianPortal = (() => {
+  const navIcons = {
+    dashboard: 'dashboard',
+    tickets: 'ticket',
+    activity: 'log',
+    profile: 'settings'
+  };
+
   function escapeHtml(value = '') {
     return String(value).replace(/[&<>"']/g, (char) => (
       {
@@ -15,7 +22,67 @@ window.TechnicianPortal = (() => {
     return user?.role === 'head';
   }
 
+  function icon(id, className = 'ui-icon') {
+    const symbol = id.startsWith('ic-') ? id : `ic-${id}`;
+    return `<svg class="${className}" aria-hidden="true"><use href="#${symbol}"></use></svg>`;
+  }
+
+  async function loadIconSprite() {
+    if (document.getElementById('icon-sprite')) return;
+
+    const response = await fetch('/_icons.html').catch(() => null);
+    if (!response?.ok) return;
+
+    document.body.insertAdjacentHTML('afterbegin', await response.text());
+  }
+
+  function enhanceNavigation() {
+    document.querySelectorAll('[data-nav]').forEach((node) => {
+      if (node.dataset.iconified === 'true') return;
+      const label = node.textContent.trim();
+      const iconId = navIcons[node.dataset.nav] || 'chevron-right';
+      node.innerHTML = `${icon(iconId)}<span>${escapeHtml(label)}</span>`;
+      node.dataset.iconified = 'true';
+    });
+  }
+
+  function enhanceActions() {
+    const actions = {
+      refreshBtn: 'Refresh',
+      backBtn: 'Back to Tickets',
+      assignBtn: 'Assign',
+      closeBtn: 'Close Ticket',
+      updateStatusBtn: 'Update Status',
+      sendResponseBtn: 'Send Response',
+      assignSubmitBtn: 'Assign Ticket'
+    };
+
+    Object.entries(actions).forEach(([id, label]) => {
+      const button = document.getElementById(id);
+      if (!button || button.dataset.iconified === 'true') return;
+
+      const iconId = id === 'backBtn' ? 'arrow-left'
+        : id === 'assignBtn' || id === 'assignSubmitBtn' ? 'users'
+          : id === 'closeBtn' || id === 'updateStatusBtn' ? 'check'
+            : id === 'sendResponseBtn' ? 'mail'
+              : 'refresh';
+
+      button.innerHTML = `${icon(iconId)}${escapeHtml(label)}`;
+      button.dataset.iconified = 'true';
+    });
+
+    const closeButton = document.getElementById('assignCloseBtn');
+    if (closeButton && closeButton.dataset.iconified !== 'true') {
+      closeButton.innerHTML = icon('close');
+      closeButton.dataset.iconified = 'true';
+    }
+  }
+
   function configureShell(user, activeNav) {
+    loadIconSprite();
+    enhanceNavigation();
+    enhanceActions();
+
     const portalLabel = document.getElementById('portalLabel');
     const userName = document.getElementById('sessionUserName');
     const userMeta = document.getElementById('sessionUserMeta');
@@ -50,6 +117,8 @@ window.TechnicianPortal = (() => {
 
   return {
     escapeHtml,
+    icon,
+    loadIconSprite,
     isHead,
     configureShell,
     fetchScopedTickets,

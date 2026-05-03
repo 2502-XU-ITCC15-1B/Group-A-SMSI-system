@@ -202,6 +202,10 @@ const requestPasswordReset = async (email) => {
 // ── resetPassword ────────────────────────────────────────
 // Validates reset token and updates the user's password.
 const resetPassword = async (token, newPassword) => {
+  if (!newPassword || newPassword.length < 8) {
+    throw { status: 400, message: 'New password must be at least 8 characters.' };
+  }
+
   // 1. Validate token
   const [rows] = await pool.query(
     `SELECT pr.user_id, pr.expires_at

@@ -51,8 +51,7 @@ function bindProfileForm() {
         return;
       }
 
-      sessionStorage.setItem('woman_user', JSON.stringify(result.user));
-      sessionStorage.setItem('woman_role', result.user.role || 'client');
+      saveUserSession({ ...result.user, role: result.user.role || 'client' });
       setFormMessage(message, 'Profile updated successfully.', 'success');
       await loadProfile();
     } finally {

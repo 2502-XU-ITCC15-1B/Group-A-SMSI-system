@@ -34,7 +34,7 @@ const BASE_SELECT = `
 // Retrieves tickets with role-based access control
 // -------------------------------------------------------
 const getAll = async (user, filters = {}) => {
-  let sql = BASE_SELECT + ' WHERE 1=1';
+  let sql = BASE_SELECT + ' WHERE t.is_deleted = 0';
   const values = [];
 
   if (user.role === 'client') {
@@ -85,7 +85,7 @@ const getMine = async (user) => {
 // Fetch single ticket with strict access control
 // -------------------------------------------------------
 const getById = async (id, user) => {
-  const [rows] = await pool.query(BASE_SELECT + ' WHERE t.id = ?', [id]);
+  const [rows] = await pool.query(BASE_SELECT + ' WHERE t.id = ? AND t.is_deleted = 0', [id]);
 
   if (rows.length === 0) {
     throw { status: 404, message: 'Ticket not found.' };
@@ -171,10 +171,14 @@ const update = async (ticketId, data, user) => {
 // Updates ticket status with validation
 // -------------------------------------------------------
 const updateStatus = async (ticketId, status, user) => {
-  const allowed = ['Open', 'Assigned', 'In Progress', 'Resolved', 'Closed', 'Rejected'];
+  const allowed = ['Open', 'Assigned', 'In Progress', 'Resolved', 'Closed'];
 
   if (!allowed.includes(status)) {
     throw { status: 400, message: 'Invalid status value.' };
+  }
+
+  if (status === 'Closed' && user.role === 'technician') {
+    throw { status: 403, message: 'Only an administrator or department head can close tickets.' };
   }
 
   const [result] = await pool.query(

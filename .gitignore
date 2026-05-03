@@ -28,3 +28,4 @@ lerna-debug.log*
 .env
 
 shet/
+backend/storage/

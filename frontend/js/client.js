@@ -1,6 +1,11 @@
 window.ClientPortal = (() => {
   let modalInitialized = false;
   let onTicketCreated = null;
+  const navItems = [
+    { key: 'dashboard', label: 'Dashboard', href: '/client/dashboard.html', icon: 'dashboard' },
+    { key: 'requests', label: 'My Requests', href: '/client/requests.html', icon: 'ticket' },
+    { key: 'profile', label: 'Profile', href: '/client/profile.html', icon: 'settings' }
+  ];
 
   function escapeHtml(value = '') {
     return String(value).replace(/[&<>"']/g, (char) => {
@@ -13,6 +18,20 @@ window.ClientPortal = (() => {
       };
       return map[char];
     });
+  }
+
+  function icon(id, className = 'ui-icon') {
+    const symbol = id.startsWith('ic-') ? id : `ic-${id}`;
+    return `<svg class="${className}" aria-hidden="true"><use href="#${symbol}"></use></svg>`;
+  }
+
+  async function loadIconSprite() {
+    if (document.getElementById('icon-sprite')) return;
+
+    const response = await fetch('/_icons.html').catch(() => null);
+    if (!response?.ok) return;
+
+    document.body.insertAdjacentHTML('afterbegin', await response.text());
   }
 
   function renderSidebar(activeNav) {
@@ -32,18 +51,23 @@ window.ClientPortal = (() => {
         </div>
 
         <nav>
-          <a class="nav-item ${activeNav === 'dashboard' ? 'active' : ''}" href="/client/dashboard.html">Dashboard</a>
-          <a class="nav-item ${activeNav === 'requests' ? 'active' : ''}" href="/client/requests.html">My Requests</a>
-          <a class="nav-item ${activeNav === 'profile' ? 'active' : ''}" href="/client/profile.html">Profile</a>
+          ${navItems.map((item) => `
+            <a class="nav-item ${activeNav === item.key ? 'active' : ''}" href="${item.href}">
+              ${icon(item.icon)}<span>${escapeHtml(item.label)}</span>
+            </a>
+          `).join('')}
         </nav>
 
         <div class="sidebar-footer">
           <div class="sidebar-user-label">Signed in as</div>
           <div class="sidebar-user">${escapeHtml(user.name || 'Client User')}</div>
           <div class="sidebar-company">${escapeHtml(user.company_name || 'Client Account')}</div>
+          <button class="btn secondary sidebar-logout" id="clientSidebarLogoutBtn" type="button">${icon('logout')}Logout</button>
         </div>
       </aside>
     `;
+
+    document.getElementById('clientSidebarLogoutBtn')?.addEventListener('click', logout);
   }
 
   function renderTopbar({ title, subtitle = '', breadcrumbs = [], actionsHtml = '' }) {
@@ -71,7 +95,7 @@ window.ClientPortal = (() => {
 
         <div class="topbar-actions">
           ${actionsHtml}
-          <button class="btn secondary" id="logoutBtn" type="button">Logout</button>
+          <button class="btn secondary" id="logoutBtn" type="button">${icon('logout')}Logout</button>
         </div>
       </header>
     `;
@@ -85,14 +109,14 @@ window.ClientPortal = (() => {
 
     if (me) {
       const current = getUser() || {};
-      sessionStorage.setItem('woman_user', JSON.stringify({ ...current, ...me }));
-      sessionStorage.setItem('woman_role', me.role || current.role || 'client');
+      saveUserSession({ ...current, ...me, role: me.role || current.role || 'client' });
     }
 
     return me;
   }
 
   function initPage(config) {
+    loadIconSprite();
     renderSidebar(config.activeNav);
     renderTopbar(config);
   }
@@ -118,7 +142,7 @@ window.ClientPortal = (() => {
             <h2>New Support Request</h2>
             <p>Log a ticket and route it to the support team.</p>
           </div>
-          <button class="modal-close" id="closeTicketModalBtn" type="button" aria-label="Close">x</button>
+          <button class="modal-close" id="closeTicketModalBtn" type="button" aria-label="Close">${icon('close')}</button>
         </div>
 
         <div class="modal-body">
@@ -159,7 +183,7 @@ window.ClientPortal = (() => {
 
             <div class="form-actions">
               <button class="btn secondary" id="cancelTicketModalBtn" type="button">Cancel</button>
-              <button class="btn" id="submitTicketBtn" type="submit">Submit Ticket</button>
+              <button class="btn" id="submitTicketBtn" type="submit">${icon('plus')}Submit Ticket</button>
             </div>
           </form>
         </div>
@@ -260,7 +284,7 @@ window.ClientPortal = (() => {
       setModalMessage('Unable to create ticket.', 'error');
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Submit Ticket';
+      submitBtn.innerHTML = `${icon('plus')}Submit Ticket`;
     }
   }
 
@@ -269,6 +293,8 @@ window.ClientPortal = (() => {
     hydrateClientSession,
     initPage,
     ensureTicketModal,
-    openTicketModal
+    openTicketModal,
+    icon,
+    loadIconSprite
   };
 })();

@@ -65,8 +65,7 @@ const AdminPortal = (() => {
       return null;
     }
 
-    sessionStorage.setItem('woman_user', JSON.stringify(user));
-    sessionStorage.setItem('woman_role', user.role);
+    saveUserSession(user);
     state.user = user;
     return user;
   }
@@ -343,7 +342,7 @@ const AdminPortal = (() => {
 
     recentBody.querySelectorAll('[data-ticket-id]').forEach((row) => {
       row.addEventListener('click', () => {
-        window.location.href = `/technician/ticket-detail.html?id=${row.dataset.ticketId}`;
+        openTicketPreviewModal(row.dataset.ticketId);
       });
     });
 
@@ -362,6 +361,81 @@ const AdminPortal = (() => {
       : '<div class="empty-state">No recent activity.</div>';
   }
 
+  async function openTicketPreviewModal(ticketId) {
+    Modal.open({
+      title: 'Ticket Detail',
+      subtitle: '',
+      body: '<div class="empty-state">Loading ticket detail...</div>'
+    });
+
+    try {
+      const [ticket, logs, responses] = await Promise.all([
+        fetchTicket(ticketId),
+        fetchTicketLogs(ticketId),
+        fetchResponses(ticketId)
+      ]);
+
+      if (!ticket) {
+        $('adminModalBody').innerHTML = '<div class="empty-state">Ticket detail is unavailable.</div>';
+        return;
+      }
+
+      $('adminModalTitle').textContent = ticket.work_order_id || 'Ticket Detail';
+      $('adminModalSubtitle').textContent = ticket.title || '';
+
+      const timeline = [
+        ...logs.map((log) => ({
+          type: 'log',
+          title: log.action || 'Activity',
+          actor: log.user_name || 'System',
+          message: log.details || '',
+          created_at: log.created_at
+        })),
+        ...responses.map((response) => ({
+          type: response.internal_note ? 'internal' : 'response',
+          title: response.internal_note ? 'Internal Note' : 'Response',
+          actor: response.author_name || 'Unknown User',
+          message: response.message || '',
+          created_at: response.created_at
+        }))
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      $('adminModalBody').innerHTML = `
+        <div class="stack">
+          <section class="detail-grid">
+            <div><span class="context-label">Status</span><strong>${statusBadge(ticket.status)}</strong></div>
+            <div><span class="context-label">Priority</span><strong>${escapeHtml(ticket.priority || '-')}</strong></div>
+            <div><span class="context-label">Company</span><strong>${escapeHtml(ticket.company_name || '-')}</strong></div>
+            <div><span class="context-label">Assignee</span><strong>${escapeHtml(ticket.technician_name || 'Unassigned')}</strong></div>
+            <div><span class="context-label">Department</span><strong>${escapeHtml(ticket.department_name || 'Unassigned')}</strong></div>
+            <div><span class="context-label">Requestor</span><strong>${escapeHtml(ticket.requestor_name || '-')}</strong></div>
+            <div><span class="context-label">Created</span><strong>${formatDateTimeLocal(ticket.created_at)}</strong></div>
+            <div><span class="context-label">Updated</span><strong>${formatDateTimeLocal(ticket.updated_at)}</strong></div>
+          </section>
+          <section>
+            <span class="context-label">Description</span>
+            <p>${escapeHtml(ticket.description || 'No description provided.')}</p>
+          </section>
+          <section class="stack">
+            <h3 class="section-title">Activity</h3>
+            ${timeline.length ? timeline.map((item) => `
+              <article class="timeline-item timeline-item-${item.type}">
+                <div class="timeline-item-header">
+                  <strong>${escapeHtml(item.title)}</strong>
+                  <span class="response-meta">${formatDateTimeLocal(item.created_at)}</span>
+                </div>
+                <div class="response-role">${escapeHtml(item.actor)}</div>
+                <p>${escapeHtml(item.message)}</p>
+              </article>
+            `).join('') : '<div class="empty-state">No activity recorded for this ticket.</div>'}
+          </section>
+        </div>
+      `;
+    } catch (_error) {
+      $('adminModalBody').innerHTML = '<div class="empty-state">Unable to load ticket detail.</div>';
+    }
+  }
+
   async function initTickets() {
     renderPageShell('tickets', `
       <section class="card stack">
@@ -370,7 +444,7 @@ const AdminPortal = (() => {
             ${icon('search')}
             <input id="ticketSearch" type="search" placeholder="Search work order, title, company, requestor">
           </div>
-          <select id="ticketStatusFilter"><option value="">All Statuses</option><option>Open</option><option>Assigned</option><option>In Progress</option><option>Resolved</option><option>Closed</option><option>Rejected</option></select>
+          <select id="ticketStatusFilter"><option value="">All Statuses</option><option>Open</option><option>Assigned</option><option>In Progress</option><option>Resolved</option><option>Closed</option></select>
           <select id="ticketPriorityFilter"><option value="">All Priorities</option><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select>
           <select id="ticketCompanyFilter"><option value="">All Companies</option></select>
         </div>
@@ -466,7 +540,7 @@ const AdminPortal = (() => {
 
     async function bindTicketActions() {
       document.querySelectorAll('[data-view-ticket]').forEach((button) => {
-        button.onclick = () => { window.location.href = `/technician/ticket-detail.html?id=${button.dataset.viewTicket}`; };
+        button.onclick = () => openTicketPreviewModal(button.dataset.viewTicket);
       });
       document.querySelectorAll('[data-assign-ticket]').forEach((button) => {
         button.onclick = () => openAssignTicketModal(button.dataset.assignTicket);

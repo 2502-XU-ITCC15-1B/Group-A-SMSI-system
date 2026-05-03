@@ -26,8 +26,7 @@ async function loadProfile() {
   }
 
   profileUser = user;
-  sessionStorage.setItem('woman_user', JSON.stringify(user));
-  sessionStorage.setItem('woman_role', user.role);
+  saveUserSession(user);
 
   document.getElementById('name').value = user.name || '';
   document.getElementById('email').value = user.email || '';

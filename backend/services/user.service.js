@@ -137,22 +137,25 @@ const create = async ({ name, email, password, role, company_id, department_id }
 // ── update ───────────────────────────────────────────────
 // Updates user details
 const update = async (id, data, adminId) => {
+  const fields = [];
+  const values = [];
+
+  ['name', 'email', 'role', 'company_id', 'department_id'].forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(data, field)) {
+      fields.push(`${field} = ?`);
+      values.push(data[field] === '' ? null : data[field]);
+    }
+  });
+
+  if (!fields.length) {
+    return { success: true, message: 'No user changes submitted.' };
+  }
+
+  values.push(id);
+
   const [result] = await pool.query(
-    `UPDATE users
-     SET name = COALESCE(?, name),
-         email = COALESCE(?, email),
-         role = COALESCE(?, role),
-         company_id = COALESCE(?, company_id),
-         department_id = COALESCE(?, department_id)
-     WHERE id = ?`,
-    [
-      data.name || null,
-      data.email || null,
-      data.role || null,
-      data.company_id ?? null,
-      data.department_id ?? null,
-      id
-    ]
+    `UPDATE users SET ${fields.join(', ')} WHERE id = ?`,
+    values
   );
 
   if (result.affectedRows === 0) {

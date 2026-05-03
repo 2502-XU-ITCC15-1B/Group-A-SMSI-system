@@ -117,7 +117,7 @@ function bindResponseForm(ticketId) {
       await loadResponses(ticketId);
     } finally {
       button.disabled = false;
-      button.textContent = 'Send Response';
+      button.innerHTML = `${ClientPortal.icon('mail')}Send Response`;
     }
   });
 }

@@ -3,16 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Password Updated - SMSi</title>
+<title>Reset Password - SMSi</title>
 
 <link rel="stylesheet" href="styles/global.css">
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/icons.js" defer></script>
 </head>
 
 <body>
 
 <div class="auth-shell">
 
-  <!-- LEFT -->
   <section class="auth-left">
     <div class="auth-brand">
       <h1>SMSi</h1>
@@ -20,25 +22,92 @@
     </div>
   </section>
 
-  <!-- RIGHT -->
   <section class="auth-right">
-    <div class="auth-panel-card" style="text-align:center">
+    <div class="auth-panel-card">
 
-      <div class="auth-icon-badge">✔</div>
+      <div class="auth-icon-badge">
+        <svg class="ui-icon" aria-hidden="true"><use href="#ic-lock"></use></svg>
+      </div>
 
-      <h2 class="auth-title">Password Updated</h2>
-      <p class="auth-subtitle">
-        Your password has been successfully reset. You may now log in.
+      <h2 class="auth-title" id="title">Reset Password</h2>
+      <p class="auth-subtitle" id="subtitle">
+        Enter a new password for your account.
       </p>
 
-      <button class="auth-btn" onclick="window.location.href='login.html'">
-        Back to Login
-      </button>
+      <form id="resetForm">
+
+        <div class="auth-field">
+          <label class="auth-label">New Password</label>
+          <input class="auth-input" id="newPassword" type="password" minlength="8" required>
+        </div>
+
+        <div class="auth-field">
+          <label class="auth-label">Confirm Password</label>
+          <input class="auth-input" id="confirmPassword" type="password" minlength="8" required>
+        </div>
+
+        <button class="auth-btn" type="submit">Update Password</button>
+        <div id="msg" class="auth-message"></div>
+
+      </form>
+
+      <div class="auth-footer">
+        <a href="login.html" class="auth-link">Back to Login</a>
+      </div>
 
     </div>
   </section>
 
 </div>
+
+<script>
+const token = new URLSearchParams(window.location.search).get('token');
+const form = document.getElementById('resetForm');
+const msg = document.getElementById('msg');
+
+if (!token) {
+  form.hidden = true;
+  msg.textContent = 'Reset token is missing or invalid.';
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const newPassword = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+  const button = e.submitter;
+
+  msg.textContent = '';
+  msg.style.color = '';
+
+  if (newPassword !== confirmPassword) {
+    msg.textContent = 'Passwords do not match.';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Updating...';
+
+  try {
+    const res = await resetPassword(token, newPassword);
+
+    if (!res?.success) {
+      msg.textContent = res?.message || 'Unable to reset password.';
+      return;
+    }
+
+    form.reset();
+    form.hidden = true;
+    document.getElementById('title').textContent = 'Password Updated';
+    document.getElementById('subtitle').textContent = 'Your password has been reset. You may now log in.';
+    msg.style.color = 'green';
+    msg.textContent = res.message || 'Password updated successfully.';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Update Password';
+  }
+});
+</script>
 
 </body>
 </html>

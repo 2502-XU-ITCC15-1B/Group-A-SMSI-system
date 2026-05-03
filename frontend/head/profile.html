@@ -2,13 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0; url=/technician/profile.html">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Redirecting</title>
+  <meta http-equiv="refresh" content="0; url=/technician/profile.html">
+  <title>Opening Profile</title>
+  <link rel="stylesheet" href="/styles/global.css">
 </head>
 <body>
-  <script>
-    window.location.replace('/technician/profile.html');
-  </script>
+  <main class="auth-shell">
+    <section class="auth-right">
+      <div class="auth-panel-card" style="text-align:center">
+        <h1 class="auth-title">Profile</h1>
+        <p class="auth-subtitle">Opening the shared account settings page...</p>
+        <a class="auth-btn" href="/technician/profile.html">Continue</a>
+      </div>
+    </section>
+  </main>
+  <script>window.location.replace('/technician/profile.html');</script>
 </body>
 </html>

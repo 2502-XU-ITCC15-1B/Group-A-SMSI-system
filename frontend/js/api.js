@@ -3,30 +3,57 @@
 // Fully aligned with backend routes/services
 // ============================================================
 
-const apiBaseUrl = window.API_BASE_URL || 'http://localhost:5000/api';
+const apiBaseUrl = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL;
+
+if (!apiBaseUrl) {
+  throw new Error('API_BASE_URL is not configured. Load frontend/js/config.js before frontend/js/api.js.');
+}
 
 /* ===========================================================
    SESSION HANDLING
 =========================================================== */
-const getToken = () => sessionStorage.getItem('woman_token');
+const sessionKeys = ['woman_token', 'woman_user', 'woman_role'];
+
+function storageGet(key) {
+  return localStorage.getItem(key) || sessionStorage.getItem(key);
+}
+
+function storageSet(key, value) {
+  localStorage.setItem(key, value);
+  sessionStorage.setItem(key, value);
+}
+
+function storageRemoveSession() {
+  sessionKeys.forEach((key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  });
+}
+
+const getToken = () => storageGet('woman_token');
 
 const getUser = () => {
   try {
-    return JSON.parse(sessionStorage.getItem('woman_user'));
+    return JSON.parse(storageGet('woman_user'));
   } catch {
     return null;
   }
 };
 
 const saveSession = (token, user) => {
-  sessionStorage.setItem('woman_token', token);
-  sessionStorage.setItem('woman_user', JSON.stringify(user));
-  sessionStorage.setItem('woman_role', user.role);
+  storageSet('woman_token', token);
+  storageSet('woman_user', JSON.stringify(user));
+  storageSet('woman_role', user.role);
 };
 
 function logout() {
-  sessionStorage.clear();
+  storageRemoveSession();
   window.location.href = '/login.html';
+}
+
+function saveUserSession(user) {
+  storageSet('woman_user', JSON.stringify(user));
+  storageSet('woman_role', user.role);
 }
 
 /* ===========================================================

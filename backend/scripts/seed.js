@@ -47,6 +47,9 @@ const users = [
   }
 ];
 
+let userIds = {};
+let ticketIds = {};
+
 // ------------------------------------------------------------
 // COMPANIES
 // ------------------------------------------------------------
@@ -129,10 +132,27 @@ const logs = [
       await pool.query(
         `INSERT INTO users (name, email, password_hash, role, company_id, department_id)
          VALUES (?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash)`,
+         ON DUPLICATE KEY UPDATE
+           name = VALUES(name),
+           password_hash = VALUES(password_hash),
+           role = VALUES(role),
+           company_id = VALUES(company_id),
+           department_id = VALUES(department_id),
+           is_active = 1`,
         [u.name, u.email, hash, u.role, u.company_id, u.department_id]
       );
     }
+
+    const [seedUsers] = await pool.query(
+      `SELECT id, email FROM users
+       WHERE email IN (?, ?, ?, ?)`,
+      users.map((user) => user.email)
+    );
+
+    userIds = seedUsers.reduce((map, user) => {
+      map[user.email] = user.id;
+      return map;
+    }, {});
 
     // ---------------- COMPANIES ----------------
     for (const c of companies) {
@@ -149,8 +169,11 @@ const logs = [
       await pool.query(
         `INSERT INTO departments (id, name, manager_id, is_active)
          VALUES (?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE name = VALUES(name)`,
-        [d.id, d.name, d.manager_id, d.is_active]
+         ON DUPLICATE KEY UPDATE
+           name = VALUES(name),
+           manager_id = VALUES(manager_id),
+           is_active = VALUES(is_active)`,
+        [d.id, d.name, userIds['head@smsi.com'], d.is_active]
       );
     }
 
@@ -161,27 +184,47 @@ const logs = [
          (work_order_id, title, description, company_id, department_id,
           requestor_id, technician_id, priority, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE title = VALUES(title)`,
+         ON DUPLICATE KEY UPDATE
+           title = VALUES(title),
+           description = VALUES(description),
+           company_id = VALUES(company_id),
+           department_id = VALUES(department_id),
+           requestor_id = VALUES(requestor_id),
+           technician_id = VALUES(technician_id),
+           priority = VALUES(priority),
+           status = VALUES(status),
+           is_deleted = 0`,
         [
           t.work_order_id,
           t.title,
           t.description,
           t.company_id,
           t.department_id,
-          t.requestor_id,
-          t.technician_id,
+          userIds['client@testco.com'],
+          userIds['tech@smsi.com'],
           t.priority,
           t.status
         ]
       );
     }
 
+    const [seedTickets] = await pool.query(
+      `SELECT id, work_order_id FROM tickets
+       WHERE work_order_id IN (?)`,
+      [tickets.map((ticket) => ticket.work_order_id)]
+    );
+
+    ticketIds = seedTickets.reduce((map, ticket) => {
+      map[ticket.work_order_id] = ticket.id;
+      return map;
+    }, {});
+
     // ---------------- RESPONSES ----------------
     for (const r of responses) {
       await pool.query(
         `INSERT INTO ticket_responses (ticket_id, user_id, message, internal_note)
          VALUES (?, ?, ?, ?)`,
-        [r.ticket_id, r.user_id, r.message, r.internal_note]
+        [ticketIds['WO-2026-0001'], userIds['tech@smsi.com'], r.message, r.internal_note]
       );
     }
 
@@ -190,7 +233,7 @@ const logs = [
       await pool.query(
         `INSERT INTO activity_logs (ticket_id, user_id, action, details)
          VALUES (?, ?, ?, ?)`,
-        [l.ticket_id, l.user_id, l.action, l.details]
+        [ticketIds['WO-2026-0001'], userIds['admin@smsi.com'], l.action, l.details]
       );
     }
 

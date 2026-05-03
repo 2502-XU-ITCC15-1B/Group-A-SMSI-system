@@ -3,12 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Redirecting</title>
+  <title>Opening Ticket Detail</title>
+  <link rel="stylesheet" href="/styles/global.css">
 </head>
 <body>
+  <main class="auth-shell">
+    <section class="auth-right">
+      <div class="auth-panel-card" style="text-align:center">
+        <h1 class="auth-title">Ticket Detail</h1>
+        <p class="auth-subtitle">Opening the role-aware ticket workspace...</p>
+        <a class="auth-btn" id="continueLink" href="/technician/ticket-detail.html">Continue</a>
+      </div>
+    </section>
+  </main>
   <script>
     const query = window.location.search || '';
-    window.location.replace(`/technician/ticket-detail.html${query}`);
+    const target = `/technician/ticket-detail.html${query}`;
+    document.getElementById('continueLink').href = target;
+    window.location.replace(target);
   </script>
 </body>
 </html>

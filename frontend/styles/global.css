@@ -3,26 +3,27 @@
    ============================================================ */
 
 :root{
-  --bg:#f7f9fb;
+  --bg:#f5f7fb;
   --surface:#ffffff;
-  --surface-soft:#f2f4f6;
-  --line:#c3c6d7;
-  --line-soft:#d9e0ea;
-  --text:#191c1e;
-  --muted:#434655;
-  --accent:#2563eb;
-  --accent-hover:#1d4ed8;
-  --accent-soft:#dbe1ff;
-  --danger:#ba1a1a;
-  --success:#0f9d58;
-  --warning:#c77d00;
+  --surface-soft:#eef2f7;
+  --line:#cbd5e1;
+  --line-soft:#e2e8f0;
+  --text:#111827;
+  --muted:#64748b;
+  --accent:#1f5fbf;
+  --accent-hover:#164a99;
+  --accent-soft:#e8f0ff;
+  --danger:#b42318;
+  --success:#067647;
+  --warning:#b54708;
+  --nav:#0f172a;
 
   --radius:8px;
-  --radius-lg:12px;
-  --radius-xl:16px;
+  --radius-lg:8px;
+  --radius-xl:8px;
 
-  --shadow-sm:0 4px 16px rgba(15, 23, 42, .04);
-  --shadow-md:0 10px 30px rgba(15, 23, 42, .08);
+  --shadow-sm:0 1px 2px rgba(15, 23, 42, .04);
+  --shadow-md:0 12px 32px rgba(15, 23, 42, .10);
 }
 
 /* ── RESET / BASE ─────────────────────────────────────────── */
@@ -37,7 +38,8 @@ html,body{
   min-height:100%;
   background:var(--bg);
   color:var(--text);
-  font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif
+  font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  font-size:14px
 }
 
 a{
@@ -61,7 +63,8 @@ img{
 
 .app-shell{
   display:flex;
-  min-height:100vh
+  min-height:100vh;
+  background:var(--bg)
 }
 
 .main{
@@ -70,7 +73,9 @@ img{
 }
 
 .content{
-  padding:24px
+  width:min(1440px,100%);
+  padding:28px;
+  margin:0 auto
 }
 
 /* ── SIDEBAR ──────────────────────────────────────────────── */
@@ -78,32 +83,39 @@ img{
 .sidebar{
   display:flex;
   flex-direction:column;
-  width:240px;
-  background:var(--surface);
+  width:260px;
+  background:var(--nav);
   border-right:1px solid var(--line-soft);
-  padding:16px;
+  padding:18px;
   position:sticky;
   top:0;
   height:100vh;
-  box-shadow:inset -1px 0 0 rgba(255,255,255,.6)
+  color:#dbe4f0;
+  box-shadow:inset -1px 0 0 rgba(255,255,255,.06)
 }
 
 .sidebar .brand{
   display:flex;
   gap:12px;
   align-items:center;
-  margin-bottom:20px
+  margin-bottom:24px;
+  padding-bottom:16px;
+  border-bottom:1px solid rgba(226,232,240,.12)
 }
 
 .sidebar .brand img{
-  width:36px;
-  height:36px;
+  width:38px;
+  height:38px;
   object-fit:contain
+}
+
+.sidebar .brand strong{
+  color:#fff
 }
 
 .sidebar .brand span{
   display:block;
-  color:var(--muted);
+  color:#94a3b8;
   font-size:12px;
   text-transform:capitalize
 }
@@ -112,35 +124,38 @@ img{
   display:flex;
   align-items:center;
   gap:12px;
-  padding:12px 14px;
-  border-radius:12px;
-  color:var(--muted);
-  margin-bottom:4px;
+  min-height:44px;
+  padding:11px 12px;
+  border-radius:8px;
+  color:#cbd5e1;
+  margin-bottom:6px;
+  border:1px solid transparent;
   transition:background .2s ease,color .2s ease,border-color .2s ease
 }
 
 .nav-item:hover{
-  background:#eef3ff;
-  color:var(--accent)
+  background:rgba(255,255,255,.08);
+  color:#fff
 }
 
 .nav-item.active{
-  background:#eef3ff;
+  background:#fff;
   color:var(--accent);
-  border-left:3px solid var(--accent)
+  border-color:#fff;
+  box-shadow:0 8px 20px rgba(2,6,23,.16)
 }
 
 /* ── TOPBAR ───────────────────────────────────────────────── */
 
 .topbar{
-  height:64px;
-  background:rgba(255,255,255,.92);
+  min-height:78px;
+  background:rgba(255,255,255,.94);
   backdrop-filter:blur(10px);
   border-bottom:1px solid var(--line-soft);
   display:flex;
   justify-content:space-between;
   align-items:center;
-  padding:0 20px;
+  padding:16px 28px;
   position:sticky;
   top:0;
   z-index:20
@@ -157,7 +172,7 @@ img{
   display:flex;
   gap:8px;
   color:var(--muted);
-  font-size:14px
+  font-size:13px
 }
 
 /* ── CARDS / SURFACES ─────────────────────────────────────── */
@@ -165,8 +180,8 @@ img{
 .card{
   background:var(--surface);
   border:1px solid var(--line-soft);
-  border-radius:18px;
-  padding:18px;
+  border-radius:8px;
+  padding:20px;
   box-shadow:var(--shadow-sm)
 }
 
@@ -186,7 +201,7 @@ img{
 
 .table-wrap{
   overflow:auto;
-  border-radius:18px;
+  border-radius:8px;
   border:1px solid var(--line-soft);
   background:var(--surface)
 }
@@ -197,7 +212,7 @@ table{
 }
 
 th,td{
-  padding:14px 16px;
+  padding:13px 16px;
   border-bottom:1px solid #edf2f7;
   text-align:left;
   vertical-align:top
@@ -207,8 +222,12 @@ th{
   font-size:12px;
   text-transform:uppercase;
   letter-spacing:.04em;
-  color:var(--muted);
-  background:#fbfcfe
+  color:#475569;
+  background:#f8fafc
+}
+
+tbody tr:hover{
+  background:#fbfdff
 }
 
 /* ── BADGES ─────────────────────────────────────────────── */
@@ -260,8 +279,8 @@ th{
 .field textarea,
 .field select{
   border:1px solid var(--line);
-  border-radius:12px;
-  padding:12px 14px;
+  border-radius:8px;
+  padding:11px 12px;
   background:#fff;
   color:var(--text);
   transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease
@@ -283,8 +302,9 @@ th{
   justify-content:center;
   gap:8px;
   border:0;
-  border-radius:12px;
-  padding:12px 16px;
+  min-height:40px;
+  border-radius:8px;
+  padding:10px 14px;
   background:var(--accent);
   color:#fff;
   cursor:pointer;
@@ -300,8 +320,8 @@ th{
 }
 
 .btn.secondary{
-  background:#e9eef7;
-  color:#102a43
+  background:#eef2f7;
+  color:#1e293b
 }
 
 .btn.secondary:hover{
@@ -333,7 +353,7 @@ th{
 .modal-panel{
   width:min(920px,100%);
   background:#fff;
-  border-radius:20px;
+  border-radius:8px;
   overflow:hidden;
   box-shadow:var(--shadow-md)
 }
@@ -375,8 +395,8 @@ th{
 
 .section-title{
   margin:0;
-  font-size:20px;
-  line-height:28px
+  font-size:18px;
+  line-height:26px
 }
 
 .section-subtitle{
@@ -439,28 +459,42 @@ th{
 .sidebar-footer{
   margin-top:auto;
   padding-top:20px;
-  border-top:1px solid var(--line-soft)
+  border-top:1px solid rgba(226,232,240,.12)
 }
 
 .sidebar-user-label{
   font-size:12px;
-  color:var(--muted)
+  color:#94a3b8
 }
 
 .sidebar-user{
   margin-top:6px;
-  font-weight:600
+  font-weight:600;
+  color:#fff
 }
 
 .sidebar-company{
   margin-top:2px;
-  color:var(--muted);
+  color:#94a3b8;
   font-size:13px
 }
 
 .metric-card{
-  min-height:132px;
-  justify-content:space-between
+  min-height:118px;
+  justify-content:space-between;
+  position:relative;
+  overflow:hidden
+}
+
+.metric-card::after{
+  content:"";
+  position:absolute;
+  right:18px;
+  top:18px;
+  width:36px;
+  height:36px;
+  border-radius:8px;
+  background:var(--accent-soft)
 }
 
 .metric-label{
@@ -469,7 +503,7 @@ th{
 }
 
 .metric-value{
-  font-size:34px;
+  font-size:32px;
   line-height:1.1
 }
 
@@ -497,7 +531,7 @@ th{
   min-height:44px;
   padding:0 14px;
   border:1px solid var(--line);
-  border-radius:12px;
+  border-radius:8px;
   background:#fff
 }
 
@@ -533,7 +567,7 @@ th{
   min-width:40px;
   min-height:40px;
   border:1px solid var(--line-soft);
-  border-radius:10px;
+  border-radius:8px;
   background:#fff;
   color:var(--muted);
   cursor:pointer
@@ -604,7 +638,7 @@ th{
   width:40px;
   height:40px;
   border-radius:999px;
-  background:var(--accent);
+  background:linear-gradient(135deg,var(--accent),#0f766e);
   color:#fff;
   display:flex;
   align-items:center;
@@ -634,7 +668,7 @@ th{
   bottom:24px;
   z-index:80;
   padding:12px 16px;
-  border-radius:12px;
+  border-radius:8px;
   color:#fff;
   font-weight:600;
   box-shadow:var(--shadow-md)
@@ -705,7 +739,7 @@ th{
 
 .response-card{
   border:1px solid var(--line-soft);
-  border-radius:12px;
+  border-radius:8px;
   padding:16px;
   background:#fbfcfe
 }
@@ -771,7 +805,7 @@ th{
 .timeline-item{
   border:1px solid var(--line-soft);
   border-left:4px solid var(--line);
-  border-radius:12px;
+  border-radius:8px;
   padding:16px;
   background:#fbfcfe
 }
@@ -815,6 +849,23 @@ input[readonly]{
   color:var(--muted)
 }
 
+.nav-item .ui-icon,
+.btn .ui-icon,
+.auth-link .ui-icon{
+  width:17px;
+  height:17px
+}
+
+.sidebar-logout{
+  background:rgba(255,255,255,.08);
+  color:#e2e8f0
+}
+
+.sidebar-logout:hover{
+  background:rgba(255,255,255,.14);
+  color:#fff
+}
+
 /* ============================================================
    AUTH PAGES
    Use these classes for login / forgot / reset pages
@@ -823,12 +874,13 @@ input[readonly]{
 .auth-shell{
   display:flex;
   min-height:100vh;
-  background:var(--bg)
+  background:var(--bg);
+  color:var(--text)
 }
 
 .auth-left{
   flex:1;
-  background:var(--surface-soft);
+  background:var(--nav);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -851,7 +903,7 @@ input[readonly]{
   content:"";
   position:absolute;
   inset:0;
-  background:linear-gradient(135deg, rgba(37,99,235,.10), transparent 45%, transparent 100%);
+  background:linear-gradient(135deg, rgba(31,95,191,.22), transparent 48%, rgba(15,118,110,.16));
   pointer-events:none
 }
 
@@ -868,12 +920,12 @@ input[readonly]{
   line-height:36px;
   letter-spacing:-.02em;
   font-weight:700;
-  color:var(--text)
+  color:#fff
 }
 
 .auth-brand p{
   margin:0;
-  color:var(--muted);
+  color:#cbd5e1;
   font-size:18px;
   line-height:28px
 }
@@ -958,6 +1010,9 @@ input[readonly]{
 }
 
 .auth-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
   width:100%;
   height:44px;
   background:var(--accent);
@@ -993,7 +1048,7 @@ input[readonly]{
 .auth-icon-badge{
   width:56px;
   height:56px;
-  border-radius:14px;
+  border-radius:8px;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -1003,12 +1058,17 @@ input[readonly]{
   box-shadow:inset 0 0 0 1px rgba(37,99,235,.10)
 }
 
+.auth-icon-badge .ui-icon{
+  width:24px;
+  height:24px
+}
+
 .auth-panel-card{
   width:100%;
   max-width:420px;
   background:var(--surface);
   border:1px solid var(--line-soft);
-  border-radius:20px;
+  border-radius:8px;
   padding:32px;
   box-shadow:var(--shadow-md)
 }
@@ -1016,6 +1076,28 @@ input[readonly]{
 /* ── RESPONSIVE AUTH LAYOUT ──────────────────────────────── */
 
 @media (max-width: 1024px){
+  .app-shell{
+    flex-direction:column
+  }
+
+  .sidebar{
+    width:100%;
+    height:auto;
+    position:relative;
+    border-right:0;
+    border-bottom:1px solid rgba(226,232,240,.12)
+  }
+
+  .sidebar nav{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:8px
+  }
+
+  .sidebar-footer{
+    display:none
+  }
+
   .auth-shell{
     display:block
   }
@@ -1036,8 +1118,16 @@ input[readonly]{
   }
 
   .card{
-    border-radius:16px;
+    border-radius:8px;
     padding:16px
+  }
+
+  .sidebar nav{
+    grid-template-columns:1fr 1fr
+  }
+
+  .nav-item{
+    min-height:40px
   }
 
   .auth-right{

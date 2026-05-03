@@ -2,7 +2,7 @@ let currentUser = null;
 let currentTicket = null;
 let currentTicketId = null;
 
-const ticketStatuses = ['Open', 'Assigned', 'In Progress', 'Resolved', 'Rejected'];
+const ticketStatuses = ['Open', 'Assigned', 'In Progress', 'Resolved', 'Closed'];
 
 document.addEventListener('DOMContentLoaded', async () => {
   currentUser = await Auth.requireRoleAsync('technician', 'head');

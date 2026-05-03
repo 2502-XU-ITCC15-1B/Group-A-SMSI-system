@@ -1,13 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="0; url=/technician/tickets.html">
-  <title>Redirecting...</title>
+  <title>Opening My Tickets</title>
+  <link rel="stylesheet" href="/styles/global.css">
 </head>
 <body>
-  <p>Redirecting to tickets...</p>
-  <script>
-    window.location.replace('/technician/tickets.html');
-  </script>
+  <main class="auth-shell">
+    <section class="auth-right">
+      <div class="auth-panel-card" style="text-align:center">
+        <h1 class="auth-title">My Tickets</h1>
+        <p class="auth-subtitle">Opening your assigned ticket queue...</p>
+        <a class="auth-btn" href="/technician/tickets.html">Continue</a>
+      </div>
+    </section>
+  </main>
+  <script>window.location.replace('/technician/tickets.html');</script>
 </body>
 </html>

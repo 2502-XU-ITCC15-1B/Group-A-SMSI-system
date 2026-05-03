@@ -8,11 +8,11 @@ const logService = require('./log.service');
 const getAll = async () => {
   const [rows] = await pool.query(
     `SELECT c.*,
-            COUNT(u.id) AS user_count,
-            COUNT(t.id) AS ticket_count
+            COUNT(DISTINCT u.id) AS user_count,
+            COUNT(DISTINCT t.id) AS ticket_count
      FROM companies c
      LEFT JOIN users u ON u.company_id = c.id
-     LEFT JOIN tickets t ON t.company_id = c.id
+     LEFT JOIN tickets t ON t.company_id = c.id AND t.is_deleted = 0
      GROUP BY c.id
      ORDER BY c.name ASC`
   );

@@ -13,8 +13,7 @@ window.Auth = (() => {
 
     const current = getUser() || {};
     const merged = { ...current, ...user };
-    sessionStorage.setItem('woman_user', JSON.stringify(merged));
-    sessionStorage.setItem('woman_role', merged.role);
+    saveUserSession(merged);
 
     return merged;
   }
@@ -39,8 +38,7 @@ window.Auth = (() => {
 
     if (allowedRoles.length && !allowedRoles.includes(user.role)) {
       alert('Access denied.');
-      const fallback = user.role === 'head' ? '/technician/dashboard.html' : '/login.html';
-      window.location.href = fallback;
+      window.location.href = '/login.html';
       return null;
     }
 

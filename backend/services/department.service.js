@@ -12,7 +12,7 @@ const getAll = async () => {
             COUNT(t.id) AS ticket_count
      FROM departments d
      LEFT JOIN users u ON u.id = d.manager_id
-     LEFT JOIN tickets t ON t.department_id = d.id
+     LEFT JOIN tickets t ON t.department_id = d.id AND t.is_deleted = 0
      GROUP BY d.id
      ORDER BY d.name ASC`
   );
@@ -50,13 +50,25 @@ const create = async ({ name, manager_id, is_active = 1 }, adminId) => {
 };
 
 const update = async (id, data, adminId) => {
+  const fields = [];
+  const values = [];
+
+  ['name', 'manager_id', 'is_active'].forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(data, field)) {
+      fields.push(`${field} = ?`);
+      values.push(data[field] === '' ? null : data[field]);
+    }
+  });
+
+  if (!fields.length) {
+    return { success: true, message: 'No department changes submitted.' };
+  }
+
+  values.push(id);
+
   const [result] = await pool.query(
-    `UPDATE departments
-     SET name = COALESCE(?, name),
-         manager_id = COALESCE(?, manager_id),
-         is_active = COALESCE(?, is_active)
-     WHERE id = ?`,
-    [data.name || null, data.manager_id ?? null, data.is_active ?? null, id]
+    `UPDATE departments SET ${fields.join(', ')} WHERE id = ?`,
+    values
   );
 
   if (result.affectedRows === 0) {

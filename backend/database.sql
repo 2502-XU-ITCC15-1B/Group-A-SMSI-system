@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   description TEXT NULL,
 
   priority ENUM('Low','Medium','High','Critical') NOT NULL DEFAULT 'Medium',
-  status ENUM('Open','Assigned','In Progress','Resolved','Closed','Rejected') NOT NULL DEFAULT 'Open',
+  status ENUM('Open','Assigned','In Progress','Resolved','Closed') NOT NULL DEFAULT 'Open',
 
   company_id BIGINT UNSIGNED NULL,
   department_id BIGINT UNSIGNED NULL,
