@@ -27,6 +27,21 @@ window.TechnicianPortal = (() => {
     return `<svg class="${className}" aria-hidden="true"><use href="#${symbol}"></use></svg>`;
   }
 
+  function clearAppSession() {
+    ['woman_token', 'woman_user', 'woman_role'].forEach((key) => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
+  }
+
+  function handleLogout(event) {
+    if (event) event.preventDefault();
+    clearAppSession();
+    window.location.replace('/login.html');
+  }
+
+  window.technicianLogout = handleLogout;
+
   async function loadIconSprite() {
     if (document.getElementById('icon-sprite')) return;
 
@@ -102,6 +117,29 @@ window.TechnicianPortal = (() => {
     document.querySelectorAll('[data-nav]').forEach((node) => {
       node.classList.toggle('active', node.dataset.nav === activeNav);
     });
+
+    // Ensure logout button exists in the sidebar footer
+    let logoutBtn = document.getElementById('technicianLogoutBtn');
+    if (!logoutBtn) {
+      const footer = document.querySelector('.sidebar-footer');
+      if (footer) {
+        const button = document.createElement('button');
+        button.className = 'btn secondary sidebar-logout';
+        button.id = 'technicianLogoutBtn';
+        button.type = 'button';
+        button.setAttribute('aria-label', 'Logout');
+        button.textContent = 'Logout';
+        button.addEventListener('click', handleLogout);
+        button.onclick = handleLogout;
+        footer.appendChild(button);
+        logoutBtn = button;
+      }
+    }
+
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', handleLogout);
+      logoutBtn.onclick = handleLogout;
+    }
   }
 
   async function fetchScopedTickets(user) {

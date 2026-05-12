@@ -391,3 +391,6 @@ async function apiFetch(path, options = {}) {
 
   return apiRequest(path, normalized);
 }
+
+// Expose logout to window scope
+window.logout = logout;

@@ -140,7 +140,10 @@ const AdminPortal = (() => {
     state.page = pageKey;
     document.body.innerHTML = layoutShell(pageKey);
     $('adminContent').innerHTML = bodyMarkup;
-    $('adminLogoutBtn').addEventListener('click', logout);
+    $('adminLogoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.logout();
+    });
   }
 
   function statusBadge(status) {

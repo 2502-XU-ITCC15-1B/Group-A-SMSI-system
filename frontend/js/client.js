@@ -67,7 +67,10 @@ window.ClientPortal = (() => {
       </aside>
     `;
 
-    document.getElementById('clientSidebarLogoutBtn')?.addEventListener('click', logout);
+    document.getElementById('clientSidebarLogoutBtn')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.logout();
+    });
   }
 
   function renderTopbar({ title, subtitle = '', breadcrumbs = [], actionsHtml = '' }) {
@@ -95,13 +98,9 @@ window.ClientPortal = (() => {
 
         <div class="topbar-actions">
           ${actionsHtml}
-          <button class="btn secondary" id="logoutBtn" type="button">${icon('logout')}Logout</button>
         </div>
       </header>
     `;
-
-    const logoutBtn = document.getElementById('logoutBtn');
-    logoutBtn?.addEventListener('click', logout);
   }
 
   async function hydrateClientSession() {
