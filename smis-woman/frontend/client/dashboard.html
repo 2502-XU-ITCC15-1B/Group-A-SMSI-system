@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Client Dashboard</title>
+  <link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+  <div class="app-shell">
+    <div data-client-sidebar></div>
+
+    <div class="main">
+      <div data-client-topbar></div>
+
+      <main class="content stack">
+        <section class="grid-3" id="summaryGrid">
+          <article class="card metric-card">
+            <span class="metric-label">Total Requests</span>
+            <strong class="metric-value" id="metricTotal">--</strong>
+          </article>
+
+          <article class="card metric-card">
+            <span class="metric-label">Open Requests</span>
+            <strong class="metric-value" id="metricOpen">--</strong>
+          </article>
+
+          <article class="card metric-card">
+            <span class="metric-label">Resolved Requests</span>
+            <strong class="metric-value" id="metricResolved">--</strong>
+          </article>
+        </section>
+
+        <section class="card stack">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title">Recent Submissions</h2>
+              <p class="section-subtitle">Your latest support tickets and current statuses.</p>
+            </div>
+            <a class="btn secondary" href="/client/requests.html">View All</a>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Work Order</th>
+                  <th>Title</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Submitted</th>
+                </tr>
+              </thead>
+              <tbody id="recentTicketsBody">
+                <tr>
+                  <td colspan="5" class="table-empty">Loading tickets...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/client.js"></script>
+  <script src="/client/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Client Profile</title>
+  <link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+  <div class="app-shell">
+    <div data-client-sidebar></div>
+
+    <div class="main">
+      <div data-client-topbar></div>
+
+      <main class="content stack">
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Personal Information</h2>
+            <p class="section-subtitle">Maintain the contact details used for support communication.</p>
+          </div>
+
+          <form id="profileForm" class="stack">
+            <div class="form-row">
+              <div class="field">
+                <label for="name">Name</label>
+                <input id="name" type="text" required>
+              </div>
+
+              <div class="field">
+                <label for="email">Email</label>
+                <input id="email" type="email" required>
+              </div>
+            </div>
+
+            <p id="profileMessage" class="form-msg" aria-live="polite"></p>
+
+            <div class="form-actions">
+              <button class="btn" id="saveProfileBtn" type="submit">Save Changes</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Security</h2>
+            <p class="section-subtitle">Update your password to keep the account secure.</p>
+          </div>
+
+          <form id="passwordForm" class="stack">
+            <div class="form-row">
+              <div class="field">
+                <label for="currentPassword">Current Password</label>
+                <input id="currentPassword" type="password" required>
+              </div>
+
+              <div class="field">
+                <label for="newPassword">New Password</label>
+                <input id="newPassword" type="password" minlength="8" required>
+              </div>
+            </div>
+
+            <p id="passwordMessage" class="form-msg" aria-live="polite"></p>
+
+            <div class="form-actions">
+              <button class="btn secondary" id="changePasswordBtn" type="submit">Update Password</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Account Details</h2>
+            <p class="section-subtitle">Read-only information tied to your client account.</p>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="role">Role</label>
+              <input id="role" type="text" readonly>
+            </div>
+
+            <div class="field">
+              <label for="company">Company</label>
+              <input id="company" type="text" readonly>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/client.js"></script>
+  <script src="/client/profile.js"></script>
+</body>
+</html>

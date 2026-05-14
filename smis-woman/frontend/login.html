@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - SMSi</title>
+
+<link rel="stylesheet" href="styles/global.css">
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/icons.js" defer></script>
+</head>
+
+<body>
+
+<div class="auth-shell">
+
+  <!-- LEFT PANEL -->
+  <section class="auth-left">
+    <div class="auth-brand">
+      <h1>SMSi</h1>
+      <p>Enterprise Ticketing & Support Infrastructure</p>
+    </div>
+  </section>
+
+  <!-- RIGHT PANEL -->
+  <section class="auth-right">
+    <div class="auth-card">
+
+      <div class="auth-icon-badge">
+        <svg class="ui-icon" aria-hidden="true"><use href="#ic-lock"></use></svg>
+      </div>
+
+      <h2 class="auth-title">Sign In</h2>
+      <p class="auth-subtitle">Enter your credentials to access the system</p>
+
+      <form id="loginForm">
+
+        <div class="auth-field">
+          <label class="auth-label">Email Address</label>
+          <input class="auth-input" id="email" type="email" required>
+        </div>
+
+        <div class="auth-field">
+          <div class="auth-row">
+            <label class="auth-label">Password</label>
+            <a class="auth-link" href="forgot-password.html">Forgot password?</a>
+          </div>
+          <input class="auth-input" id="password" type="password" required>
+        </div>
+
+        <button class="auth-btn" type="submit">Sign In</button>
+
+        <div id="errorMsg" class="auth-message"></div>
+
+      </form>
+
+    </div>
+  </section>
+
+</div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value.trim();
+  const msg = document.getElementById('errorMsg');
+
+  msg.textContent = '';
+
+  const res = await login({ email, password });
+
+  if (res?.success) {
+    const role = res.user.role;
+
+    if (role === 'admin') {
+      window.location.href = 'admin/dashboard.html';
+    } else if (role === 'technician') {
+      window.location.href = 'technician/dashboard.html';
+    } else if (role === 'head') {
+      window.location.href = 'head/dashboard.html';
+    } else {
+      window.location.href = 'client/dashboard.html';
+    }
+
+  } else {
+    msg.textContent = res?.message || 'Invalid login credentials';
+  }
+});
+</script>
+
+</body>
+</html>

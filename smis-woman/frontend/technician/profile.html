@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Profile</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="./common.js"></script>
+  <script src="./profile.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="../assets/logo.png" alt="SMSi">
+        <div>
+          <strong>SMSi</strong>
+          <span id="portalLabel">technician portal</span>
+        </div>
+      </div>
+
+      <nav>
+        <a class="nav-item" data-nav="dashboard" id="navDashboard" href="/technician/dashboard.html">Dashboard</a>
+        <a class="nav-item" data-nav="tickets" id="navTickets" href="/technician/tickets.html">Tickets</a>
+        <a class="nav-item" data-nav="activity" id="navActivity" href="/technician/activity.html">Activity</a>
+        <a class="nav-item active" data-nav="profile" id="navProfile" href="/technician/profile.html">Profile</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user-label">Signed in as</div>
+        <div class="sidebar-user" id="sessionUserName">Loading...</div>
+        <div class="sidebar-company" id="sessionUserMeta">Loading...</div>
+        <button class="btn secondary sidebar-logout" id="technicianLogoutBtn" type="button" aria-label="Logout" onclick="window.technicianLogout?.(event)">Logout</button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-meta">
+          <nav class="breadcrumbs">
+            <span class="crumb">Operations</span>
+            <span class="crumb current">Profile</span>
+          </nav>
+          <div>
+            <h1 class="page-title">Profile</h1>
+            <p class="page-subtitle">Manage your account details and password in one shared role-aware page.</p>
+          </div>
+        </div>
+      </header>
+
+      <main class="content stack">
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Account Information</h2>
+            <p class="section-subtitle">Basic identity data used across the service desk.</p>
+          </div>
+
+          <form id="profileForm" class="stack">
+            <div class="form-row">
+              <div class="field">
+                <label for="name">Name</label>
+                <input id="name" type="text" required>
+              </div>
+              <div class="field">
+                <label for="email">Email</label>
+                <input id="email" type="email" required>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="role">Role</label>
+                <input id="role" type="text" readonly>
+              </div>
+              <div class="field">
+                <label for="department">Department</label>
+                <input id="department" type="text" readonly>
+              </div>
+            </div>
+
+            <p id="profileMessage" class="form-msg" aria-live="polite"></p>
+
+            <div class="form-actions">
+              <button class="btn" id="saveProfileBtn" type="submit">Save Changes</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Password</h2>
+            <p class="section-subtitle">Change the password tied to this account session.</p>
+          </div>
+
+          <form id="passwordForm" class="stack">
+            <div class="form-row">
+              <div class="field">
+                <label for="currentPassword">Current Password</label>
+                <input id="currentPassword" type="password" required>
+              </div>
+              <div class="field">
+                <label for="newPassword">New Password</label>
+                <input id="newPassword" type="password" minlength="8" required>
+              </div>
+            </div>
+
+            <p id="passwordMessage" class="form-msg" aria-live="polite"></p>
+
+            <div class="form-actions">
+              <button class="btn secondary" id="changePasswordBtn" type="submit">Update Password</button>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

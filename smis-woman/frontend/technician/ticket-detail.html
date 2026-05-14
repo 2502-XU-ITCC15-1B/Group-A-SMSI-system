@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ticket Detail</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/ui-modals.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="./common.js"></script>
+  <script src="./ticket-detail.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="../assets/logo.png" alt="SMSi">
+        <div>
+          <strong>SMSi</strong>
+          <span id="portalLabel">technician portal</span>
+        </div>
+      </div>
+
+      <nav>
+        <a class="nav-item" data-nav="dashboard" id="navDashboard" href="/technician/dashboard.html">Dashboard</a>
+        <a class="nav-item active" data-nav="tickets" id="navTickets" href="/technician/tickets.html">Tickets</a>
+        <a class="nav-item" data-nav="activity" id="navActivity" href="/technician/activity.html">Activity</a>
+        <a class="nav-item" data-nav="profile" id="navProfile" href="/technician/profile.html">Profile</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user-label">Signed in as</div>
+        <div class="sidebar-user" id="sessionUserName">Loading...</div>
+        <div class="sidebar-company" id="sessionUserMeta">Loading...</div>
+        <button class="btn secondary sidebar-logout" id="technicianLogoutBtn" type="button" aria-label="Logout" onclick="window.technicianLogout?.(event)">Logout</button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-meta">
+          <nav class="breadcrumbs">
+            <span class="crumb">Operations</span>
+            <span class="crumb">Tickets</span>
+            <span class="crumb current" id="breadcrumbTicket">Detail</span>
+          </nav>
+          <div>
+            <h1 class="page-title" id="ticketTitle">Ticket Detail</h1>
+            <p class="page-subtitle" id="ticketDescription">Loading ticket context...</p>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="btn secondary" id="backBtn" type="button">Back to Tickets</button>
+          <button class="btn secondary is-hidden" id="assignBtn" type="button">Assign</button>
+          <button class="btn secondary is-hidden" id="closeBtn" type="button">Close Ticket</button>
+        </div>
+      </header>
+
+      <main class="content stack">
+        <p id="pageMessage" class="form-msg" aria-live="polite"></p>
+
+        <section class="detail-layout">
+          <div class="stack">
+            <section class="card stack">
+              <div>
+                <h2 class="section-title">Ticket Information</h2>
+                <p class="section-subtitle">Core request metadata and assignment context.</p>
+              </div>
+
+              <div class="detail-grid">
+                <div>
+                  <span class="context-label">Ticket ID</span>
+                  <strong id="ticketWorkOrder">-</strong>
+                </div>
+                <div>
+                  <span class="context-label">Status</span>
+                  <strong id="ticketStatus">-</strong>
+                </div>
+                <div>
+                  <span class="context-label">Priority</span>
+                  <strong id="ticketPriority">-</strong>
+                </div>
+                <div>
+                  <span class="context-label">Company</span>
+                  <strong id="ticketCompany">-</strong>
+                </div>
+                <div>
+                  <span class="context-label">Assigned Technician</span>
+                  <strong id="ticketAssignee">-</strong>
+                </div>
+                <div>
+                  <span class="context-label">Department</span>
+                  <strong id="ticketDepartment">-</strong>
+                </div>
+                <div>
+                  <span class="context-label">Created</span>
+                  <strong id="ticketCreated">-</strong>
+                </div>
+                <div>
+                  <span class="context-label">Requestor</span>
+                  <strong id="ticketRequestor">-</strong>
+                </div>
+              </div>
+            </section>
+
+            <section class="card stack">
+              <div>
+                <h2 class="section-title">Status Management</h2>
+                <p class="section-subtitle">Update the ticket state according to the current workflow.</p>
+              </div>
+
+              <div class="form-row">
+                <div class="field">
+                  <label for="statusSelect">New Status</label>
+                  <select id="statusSelect"></select>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button class="btn" id="updateStatusBtn" type="button">Update Status</button>
+              </div>
+            </section>
+
+            <section class="card stack">
+              <div>
+                <h2 class="section-title">Add Response</h2>
+                <p class="section-subtitle">Reply to the ticket thread and record internal notes when needed.</p>
+              </div>
+
+              <div class="field">
+                <label for="responseText">Message</label>
+                <textarea id="responseText" rows="7" placeholder="Write the response to attach to this ticket."></textarea>
+              </div>
+
+              <div class="form-row">
+                <label class="checkbox-field" for="internalNote">
+                  <input type="checkbox" id="internalNote">
+                  <span>Internal note only</span>
+                </label>
+
+                <div class="field">
+                  <label for="responseAttachment">Attachment</label>
+                  <input id="responseAttachment" name="attachment" type="file" accept=".jpg,.jpeg,.png,.gif,.pdf">
+                  <small class="field-help">Attach a JPG, JPEG, PNG, GIF, or PDF file (max 5 MB).</small>
+                </div>
+              </div>
+
+              <p id="responseMessage" class="form-msg" aria-live="polite"></p>
+
+              <div class="form-actions">
+                <button class="btn" id="sendResponseBtn" type="button">Send Response</button>
+              </div>
+            </section>
+          </div>
+
+          <section class="card stack">
+            <div>
+              <h2 class="section-title">Activity Timeline</h2>
+              <p class="section-subtitle">Combined system logs and user responses in chronological order.</p>
+            </div>
+
+            <div id="timeline" class="responses-list">
+              <div class="empty-state">Loading timeline...</div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal" id="assignModal">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <div>
+          <h2>Assign Ticket</h2>
+          <p>Select the technician who should own this ticket.</p>
+        </div>
+        <button class="modal-close" id="assignCloseBtn" type="button" aria-label="Close">x</button>
+      </div>
+
+      <div class="modal-body stack">
+        <div class="field">
+          <label for="assignTechnicianSelect">Technician</label>
+          <select id="assignTechnicianSelect"></select>
+        </div>
+
+        <div class="field">
+          <label for="assignDepartmentSelect">Department</label>
+          <select id="assignDepartmentSelect"></select>
+        </div>
+
+        <p id="assignMessage" class="form-msg" aria-live="polite"></p>
+
+        <div class="form-actions">
+          <button class="btn secondary" id="assignCancelBtn" type="button">Cancel</button>
+          <button class="btn" id="assignSubmitBtn" type="button">Assign Ticket</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

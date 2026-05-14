@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Operations Dashboard</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="./common.js"></script>
+  <script src="./dashboard.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="../assets/logo.png" alt="SMSi">
+        <div>
+          <strong>SMSi</strong>
+          <span id="portalLabel">technician portal</span>
+        </div>
+      </div>
+
+      <nav>
+        <a class="nav-item active" data-nav="dashboard" href="/technician/dashboard.html">Dashboard</a>
+        <a class="nav-item" data-nav="tickets" href="/technician/tickets.html">Tickets</a>
+        <a class="nav-item" data-nav="activity" href="/technician/activity.html">Activity</a>
+        <a class="nav-item" data-nav="profile" href="/technician/profile.html">Profile</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user-label">Signed in as</div>
+        <div class="sidebar-user" id="sessionUserName">Loading...</div>
+        <div class="sidebar-company" id="sessionUserMeta">Loading...</div>
+        <button class="btn secondary sidebar-logout" id="technicianLogoutBtn" type="button" aria-label="Logout" onclick="window.technicianLogout?.(event)">Logout</button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-meta">
+          <nav class="breadcrumbs">
+            <span class="crumb">Operations</span>
+            <span class="crumb current">Dashboard</span>
+          </nav>
+          <div>
+            <h1 class="page-title" id="pageTitle">Dashboard</h1>
+            <p class="page-subtitle" id="pageSubtitle">Loading operational summary...</p>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="search-input">
+            <input id="dashboardSearch" type="search" placeholder="Search recent tickets">
+          </div>
+          <button class="btn secondary" id="refreshBtn" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <main class="content stack">
+        <p id="dashboardMessage" class="form-msg" aria-live="polite"></p>
+
+        <section class="grid-4">
+          <article class="card metric-card">
+            <span class="metric-label">Open</span>
+            <strong class="metric-value" id="metricOpen">0</strong>
+          </article>
+          <article class="card metric-card">
+            <span class="metric-label">In Progress</span>
+            <strong class="metric-value" id="metricProgress">0</strong>
+          </article>
+          <article class="card metric-card">
+            <span class="metric-label" id="metricThirdLabel">Resolved</span>
+            <strong class="metric-value" id="metricThird">0</strong>
+          </article>
+          <article class="card metric-card">
+            <span class="metric-label">Total</span>
+            <strong class="metric-value" id="metricTotal">0</strong>
+          </article>
+        </section>
+
+        <section class="card stack">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title" id="recentTitle">Recent Tickets</h2>
+              <p class="section-subtitle" id="recentSubtitle">Latest items in your queue.</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Title</th>
+                  <th>Company</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="recentTicketRows">
+                <tr><td colspan="7" class="table-empty">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
