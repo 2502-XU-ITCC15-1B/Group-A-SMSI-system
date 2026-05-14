@@ -6,11 +6,12 @@ RUN rm -rf /usr/share/nginx/html/*
 # Copy the static HTML, CSS, and JS files to the nginx html directory
 COPY . /usr/share/nginx/html
 
-# Proxy relative /api requests to the backend service in Docker Compose
+# Use Render runtime API host config and static file routing
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # Expose port 80 inside the container
 EXPOSE 80
 
-# Start Nginx server
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

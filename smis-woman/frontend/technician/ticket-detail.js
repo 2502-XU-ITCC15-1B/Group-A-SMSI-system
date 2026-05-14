@@ -165,35 +165,6 @@ async function handleStatusUpdate() {
   }
 }
 
-function validateAttachmentFile(file) {
-  if (!file) return { valid: true };
-
-  const allowedTypes = [
-    'image/jpeg',
-    'image/jpg',
-    'image/png',
-    'image/gif',
-    'application/pdf'
-  ];
-  const maxSizeBytes = 5 * 1024 * 1024; // 5 MB
-
-  if (!allowedTypes.includes(file.type)) {
-    return {
-      valid: false,
-      message: 'Invalid attachment type. Use JPG, JPEG, PNG, GIF, or PDF.'
-    };
-  }
-
-  if (file.size > maxSizeBytes) {
-    return {
-      valid: false,
-      message: 'Attachment is too large. Maximum size is 5 MB.'
-    };
-  }
-
-  return { valid: true };
-}
-
 async function handleResponseSubmit() {
   const button = document.getElementById('sendResponseBtn');
   const messageNode = document.getElementById('responseMessage');
@@ -204,12 +175,6 @@ async function handleResponseSubmit() {
 
   if (!message) {
     setMessage(messageNode, 'Response message is required.', 'error');
-    return;
-  }
-
-  const validation = validateAttachmentFile(attachmentFile);
-  if (!validation.valid) {
-    setMessage(messageNode, validation.message, 'error');
     return;
   }
 

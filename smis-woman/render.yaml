@@ -1,0 +1,38 @@
+services:
+  - type: web_service
+    name: woman-backend
+    env: docker
+    plan: starter
+    dockerfilePath: backend/Dockerfile
+    envVars:
+      - key: PORT
+        value: "5000"
+      - key: DB_HOST
+        value: "<RENDER_DB_HOST>"
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_USER
+        value: "<RENDER_DB_USER>"
+      - key: DB_PASSWORD
+        value: "<RENDER_DB_PASSWORD>"
+      - key: DB_NAME
+        value: "woman_db"
+      - key: JWT_SECRET
+        value: "<REPLACE_WITH_SECURE_JWT_SECRET>"
+      - key: ALLOWED_ORIGIN
+        value: "https://<YOUR_FRONTEND_SERVICE>.onrender.com"
+
+  - type: web_service
+    name: woman-frontend
+    env: docker
+    plan: starter
+    dockerfilePath: frontend/Dockerfile
+    envVars:
+      - key: API_BASE_URL
+        value: "https://<YOUR_BACKEND_SERVICE>.onrender.com/api"
+
+databases:
+  - name: woman-mysql
+    engine: mysql
+    version: "8"
+    plan: starter
