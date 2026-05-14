@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: woman-app
+    env: docker
+    plan: starter
+    dockerfilePath: backend/Dockerfile
+    envVars:
+      - key: PORT
+        value: "5000"
+      - key: DB_HOST
+        value: woman-mysql
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_USER
+        value: woman_db_user
+      - key: DB_PASSWORD
+        value: password_placeholder
+      - key: DB_NAME
+        value: woman_db
+      - key: JWT_SECRET
+        value: supersecretjwt123
+      - key: ALLOWED_ORIGIN
+        value: "*"
+
+databases:
+  - name: woman-mysql
+    engine: mysql
+    version: "8"
+    plan: starter
+    
