@@ -1,9 +1,9 @@
 services:
   - type: web_service
-    name: woman-backend
+    name: woman-app
     env: docker
     plan: starter
-    dockerfilePath: backend/Dockerfile
+    dockerfilePath: Dockerfile
     envVars:
       - key: PORT
         value: "5000"
@@ -20,16 +20,7 @@ services:
       - key: JWT_SECRET
         value: "<REPLACE_WITH_SECURE_JWT_SECRET>"
       - key: ALLOWED_ORIGIN
-        value: "https://<YOUR_FRONTEND_SERVICE>.onrender.com"
-
-  - type: web_service
-    name: woman-frontend
-    env: docker
-    plan: starter
-    dockerfilePath: frontend/Dockerfile
-    envVars:
-      - key: API_BASE_URL
-        value: "https://<YOUR_BACKEND_SERVICE>.onrender.com/api"
+        value: "*"
 
 databases:
   - name: woman-mysql
