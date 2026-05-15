@@ -22,9 +22,3 @@ services:
       - key: ALLOWED_ORIGIN
         value: "*"
 
-databases:
-  - name: woman-mysql
-    engine: mysql
-    version: "8"
-    plan: starter
-    
