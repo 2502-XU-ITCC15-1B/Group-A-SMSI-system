@@ -25,24 +25,25 @@ const getAll = async (filters = {}) => {
   `;
 
   const vals = [];
+  let paramIndex = 1;
 
   if (filters.role) {
-    query += ' AND u.role = ?';
+    query += ` AND u.role = $${paramIndex++}`;
     vals.push(filters.role);
   }
 
   if (filters.company_id) {
-    query += ' AND u.company_id = ?';
+    query += ` AND u.company_id = $${paramIndex++}`;
     vals.push(filters.company_id);
   }
 
   if (filters.department_id) {
-    query += ' AND u.department_id = ?';
+    query += ` AND u.department_id = $${paramIndex++}`;
     vals.push(filters.department_id);
   }
 
   if (filters.search) {
-    query += ' AND (u.name LIKE ? OR u.email LIKE ?)';
+    query += ` AND (u.name ILIKE $${paramIndex++} OR u.email ILIKE $${paramIndex++})`;
     vals.push(`%${filters.search}%`, `%${filters.search}%`);
   }
 
@@ -63,7 +64,7 @@ const getById = async (id) => {
      FROM users u
      LEFT JOIN companies c ON c.id = u.company_id
      LEFT JOIN departments d ON d.id = u.department_id
-     WHERE u.id = ?`,
+     WHERE u.id = $1`,
     [id]
   );
 
@@ -98,7 +99,7 @@ const getTechnicians = async () => {
 // Creates a new user (admin action)
 const create = async ({ name, email, password, role, company_id, department_id }, adminId) => {
   const [existing] = await pool.query(
-    'SELECT id FROM users WHERE email = ? LIMIT 1',
+    'SELECT id FROM users WHERE email = $1 LIMIT 1',
     [email]
   );
 
@@ -114,7 +115,8 @@ const create = async ({ name, email, password, role, company_id, department_id }
 
   const [result] = await pool.query(
     `INSERT INTO users (name, email, password_hash, role, company_id, department_id, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, 1)`,
+     VALUES ($1, $2, $3, $4, $5, $6, 1)
+     RETURNING id`,
     [name, email, password_hash, role, company_id || null, department_id || null]
   );
 
@@ -125,7 +127,7 @@ const create = async ({ name, email, password, role, company_id, department_id }
   });
 
   return {
-    id: result.insertId,
+    id: result.id,
     name,
     email,
     role,
@@ -139,10 +141,11 @@ const create = async ({ name, email, password, role, company_id, department_id }
 const update = async (id, data, adminId) => {
   const fields = [];
   const values = [];
+  let paramIndex = 1;
 
   ['name', 'email', 'role', 'company_id', 'department_id'].forEach((field) => {
     if (Object.prototype.hasOwnProperty.call(data, field)) {
-      fields.push(`${field} = ?`);
+      fields.push(`${field} = $${paramIndex++}`);
       values.push(data[field] === '' ? null : data[field]);
     }
   });
@@ -154,11 +157,11 @@ const update = async (id, data, adminId) => {
   values.push(id);
 
   const [result] = await pool.query(
-    `UPDATE users SET ${fields.join(', ')} WHERE id = ?`,
+    `UPDATE users SET ${fields.join(', ')} WHERE id = $${paramIndex}`,
     values
   );
 
-  if (result.affectedRows === 0) {
+  if (result.rowCount === 0) {
     throw { status: 404, message: 'User not found.' };
   }
 
@@ -175,7 +178,7 @@ const update = async (id, data, adminId) => {
 // Activates or deactivates a user
 const setStatus = async (id, isActive, adminId) => {
   await pool.query(
-    'UPDATE users SET is_active = ? WHERE id = ?',
+    'UPDATE users SET is_active = $1 WHERE id = $2',
     [isActive ? 1 : 0, id]
   );
 
@@ -198,7 +201,7 @@ const resetPassword = async (id, password, adminId) => {
   const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
 
   await pool.query(
-    'UPDATE users SET password_hash = ? WHERE id = ?',
+    'UPDATE users SET password_hash = $1 WHERE id = $2',
     [password_hash, id]
   );
 
@@ -215,7 +218,7 @@ const resetPassword = async (id, password, adminId) => {
 // Soft delete (deactivate user instead of deleting)
 const remove = async (id, adminId) => {
   await pool.query(
-    'UPDATE users SET is_active = 0 WHERE id = ?',
+    'UPDATE users SET is_active = 0 WHERE id = $1',
     [id]
   );
 

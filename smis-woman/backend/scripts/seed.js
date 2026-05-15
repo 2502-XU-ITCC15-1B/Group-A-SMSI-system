@@ -123,21 +123,19 @@ const logs = [
 (async () => {
   try {
 
-    await pool.query('SET FOREIGN_KEY_CHECKS = 0');
-
     // ---------------- USERS ----------------
     for (const u of users) {
       const hash = await bcrypt.hash(u.password, SALT_ROUNDS);
 
       await pool.query(
         `INSERT INTO users (name, email, password_hash, role, company_id, department_id)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           name = VALUES(name),
-           password_hash = VALUES(password_hash),
-           role = VALUES(role),
-           company_id = VALUES(company_id),
-           department_id = VALUES(department_id),
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (email) DO UPDATE SET
+           name = EXCLUDED.name,
+           password_hash = EXCLUDED.password_hash,
+           role = EXCLUDED.role,
+           company_id = EXCLUDED.company_id,
+           department_id = EXCLUDED.department_id,
            is_active = 1`,
         [u.name, u.email, hash, u.role, u.company_id, u.department_id]
       );
@@ -145,8 +143,8 @@ const logs = [
 
     const [seedUsers] = await pool.query(
       `SELECT id, email FROM users
-       WHERE email IN (?, ?, ?, ?)`,
-      users.map((user) => user.email)
+       WHERE email = ANY($1)`,
+      [users.map((user) => user.email)]
     );
 
     userIds = seedUsers.reduce((map, user) => {
@@ -158,8 +156,8 @@ const logs = [
     for (const c of companies) {
       await pool.query(
         `INSERT INTO companies (id, name, contact_person, contact_email, is_active)
-         VALUES (?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE name = VALUES(name)`,
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
         [c.id, c.name, c.contact_person, c.contact_email, c.is_active]
       );
     }
@@ -168,11 +166,11 @@ const logs = [
     for (const d of departments) {
       await pool.query(
         `INSERT INTO departments (id, name, manager_id, is_active)
-         VALUES (?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           name = VALUES(name),
-           manager_id = VALUES(manager_id),
-           is_active = VALUES(is_active)`,
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           manager_id = EXCLUDED.manager_id,
+           is_active = EXCLUDED.is_active`,
         [d.id, d.name, userIds['head@smsi.com'], d.is_active]
       );
     }
@@ -183,16 +181,16 @@ const logs = [
         `INSERT INTO tickets
          (work_order_id, title, description, company_id, department_id,
           requestor_id, technician_id, priority, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           title = VALUES(title),
-           description = VALUES(description),
-           company_id = VALUES(company_id),
-           department_id = VALUES(department_id),
-           requestor_id = VALUES(requestor_id),
-           technician_id = VALUES(technician_id),
-           priority = VALUES(priority),
-           status = VALUES(status),
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (work_order_id) DO UPDATE SET
+           title = EXCLUDED.title,
+           description = EXCLUDED.description,
+           company_id = EXCLUDED.company_id,
+           department_id = EXCLUDED.department_id,
+           requestor_id = EXCLUDED.requestor_id,
+           technician_id = EXCLUDED.technician_id,
+           priority = EXCLUDED.priority,
+           status = EXCLUDED.status,
            is_deleted = 0`,
         [
           t.work_order_id,
@@ -210,7 +208,7 @@ const logs = [
 
     const [seedTickets] = await pool.query(
       `SELECT id, work_order_id FROM tickets
-       WHERE work_order_id IN (?)`,
+       WHERE work_order_id = ANY($1)`,
       [tickets.map((ticket) => ticket.work_order_id)]
     );
 
@@ -223,7 +221,7 @@ const logs = [
     for (const r of responses) {
       await pool.query(
         `INSERT INTO ticket_responses (ticket_id, user_id, message, internal_note)
-         VALUES (?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4)`,
         [ticketIds['WO-2026-0001'], userIds['tech@smsi.com'], r.message, r.internal_note]
       );
     }
@@ -232,7 +230,7 @@ const logs = [
     for (const l of logs) {
       await pool.query(
         `INSERT INTO activity_logs (ticket_id, user_id, action, details)
-         VALUES (?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4)`,
         [ticketIds['WO-2026-0001'], userIds['admin@smsi.com'], l.action, l.details]
       );
     }

@@ -21,7 +21,7 @@ const getAll = async () => {
 
 const getById = async (id) => {
   const [rows] = await pool.query(
-    'SELECT * FROM companies WHERE id = ?',
+    'SELECT * FROM companies WHERE id = $1',
     [id]
   );
 
@@ -35,7 +35,8 @@ const getById = async (id) => {
 const create = async ({ name, contact_person, contact_email, is_active = 1 }, adminId = null) => {
   const [result] = await pool.query(
     `INSERT INTO companies (name, contact_person, contact_email, is_active)
-     VALUES (?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4)
+     RETURNING id`,
     [name, contact_person || null, contact_email || null, is_active ? 1 : 0]
   );
 
@@ -47,17 +48,17 @@ const create = async ({ name, contact_person, contact_email, is_active = 1 }, ad
     });
   }
 
-  return { id: result.insertId, name };
+  return { id: result.id, name };
 };
 
 const update = async (id, data, adminId = null) => {
   const [result] = await pool.query(
     `UPDATE companies
-     SET name = COALESCE(?, name),
-         contact_person = COALESCE(?, contact_person),
-         contact_email = COALESCE(?, contact_email),
-         is_active = COALESCE(?, is_active)
-     WHERE id = ?`,
+     SET name = COALESCE($1, name),
+         contact_person = COALESCE($2, contact_person),
+         contact_email = COALESCE($3, contact_email),
+         is_active = COALESCE($4, is_active)
+     WHERE id = $5`,
     [
       data.name || null,
       data.contact_person || null,
@@ -67,7 +68,7 @@ const update = async (id, data, adminId = null) => {
     ]
   );
 
-  if (result.affectedRows === 0) {
+  if (result.rowCount === 0) {
     throw { status: 404, message: 'Company not found.' };
   }
 
@@ -84,7 +85,7 @@ const update = async (id, data, adminId = null) => {
 
 const remove = async (id, adminId = null) => {
   await pool.query(
-    'UPDATE companies SET is_active = 0 WHERE id = ?',
+    'UPDATE companies SET is_active = 0 WHERE id = $1',
     [id]
   );
 

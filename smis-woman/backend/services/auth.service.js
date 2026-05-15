@@ -21,7 +21,7 @@ const login = async (email, password) => {
   const [rows] = await pool.query(
     `SELECT id, name, email, role, company_id, department_id, password_hash, is_active
      FROM users
-     WHERE email = ? AND is_active = 1
+     WHERE email = $1 AND is_active = 1
      LIMIT 1`,
     [email]
   );
@@ -70,7 +70,7 @@ const getMe = async (userId) => {
      FROM users u
      LEFT JOIN companies c ON c.id = u.company_id
      LEFT JOIN departments d ON d.id = u.department_id
-     WHERE u.id = ?`,
+     WHERE u.id = $1`,
     [userId]
   );
 
@@ -91,7 +91,7 @@ const updateMe = async (userId, data) => {
   }
 
   const [existing] = await pool.query(
-    'SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1',
+    'SELECT id FROM users WHERE email = $1 AND id <> $2 LIMIT 1',
     [email, userId]
   );
 
@@ -101,12 +101,12 @@ const updateMe = async (userId, data) => {
 
   const [result] = await pool.query(
     `UPDATE users
-     SET name = ?, email = ?
-     WHERE id = ?`,
+     SET name = $1, email = $2
+     WHERE id = $3`,
     [name, email, userId]
   );
 
-  if (result.affectedRows === 0) {
+  if (result.rowCount === 0) {
     throw { status: 404, message: 'User not found.' };
   }
 
@@ -130,7 +130,7 @@ const changePassword = async (userId, currentPassword, newPassword) => {
   }
 
   const [rows] = await pool.query(
-    'SELECT id, password_hash FROM users WHERE id = ? LIMIT 1',
+    'SELECT id, password_hash FROM users WHERE id = $1 LIMIT 1',
     [userId]
   );
 
@@ -148,7 +148,7 @@ const changePassword = async (userId, currentPassword, newPassword) => {
   const password_hash = await bcrypt.hash(newPassword, 10);
 
   await pool.query(
-    'UPDATE users SET password_hash = ? WHERE id = ?',
+    'UPDATE users SET password_hash = $1 WHERE id = $2',
     [password_hash, userId]
   );
 
@@ -165,7 +165,7 @@ const changePassword = async (userId, currentPassword, newPassword) => {
 // Generates a reset token and stores it with expiration.
 const requestPasswordReset = async (email) => {
   const [rows] = await pool.query(
-    'SELECT id, name, email FROM users WHERE email = ? AND is_active = 1 LIMIT 1',
+    'SELECT id, name, email FROM users WHERE email = $1 AND is_active = 1 LIMIT 1',
     [email]
   );
 
@@ -182,7 +182,7 @@ const requestPasswordReset = async (email) => {
 
   await pool.query(
     `INSERT INTO password_resets (user_id, token, expires_at)
-     VALUES (?, ?, ?)`,
+     VALUES ($1, $2, $3)`,
     [user.id, token, expiresAt]
   );
 
@@ -210,7 +210,7 @@ const resetPassword = async (token, newPassword) => {
   const [rows] = await pool.query(
     `SELECT pr.user_id, pr.expires_at
      FROM password_resets pr
-     WHERE pr.token = ? AND pr.used_at IS NULL
+     WHERE pr.token = $1 AND pr.used_at IS NULL
      LIMIT 1`,
     [token]
   );
@@ -229,13 +229,13 @@ const resetPassword = async (token, newPassword) => {
 
   // 4. Update password
   await pool.query(
-    'UPDATE users SET password_hash = ? WHERE id = ?',
+    'UPDATE users SET password_hash = $1 WHERE id = $2',
     [password_hash, rows[0].user_id]
   );
 
   // 5. Mark token as used
   await pool.query(
-    'UPDATE password_resets SET used_at = NOW() WHERE token = ?',
+    'UPDATE password_resets SET used_at = NOW() WHERE token = $1',
     [token]
   );
 

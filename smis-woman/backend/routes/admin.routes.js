@@ -77,7 +77,7 @@ router.get('/reports', async (_req, res) => {
         FROM tickets
         WHERE is_deleted = 0
         GROUP BY priority
-        ORDER BY FIELD(priority, 'Critical', 'High', 'Medium', 'Low')
+        ORDER BY CASE priority WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 WHEN 'Low' THEN 4 END
       `),
       pool.query(`
         SELECT c.name, COUNT(t.id) AS ticket_count

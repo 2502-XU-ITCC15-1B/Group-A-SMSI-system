@@ -15,7 +15,7 @@ const record = async ({ ticketId = null, userId, action, details = null }) => {
   try {
     await pool.query(
       `INSERT INTO activity_logs (ticket_id, user_id, action, details)
-       VALUES (?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4)`,
       [ticketId, userId, action, details]
     );
   } catch (err) {
@@ -37,18 +37,19 @@ const getAll = async ({ ticketId = null, userId = null, limit = 100 } = {}) => {
   `;
 
   const values = [];
+  let paramIndex = 1;
 
   if (ticketId) {
-    sql += ' AND l.ticket_id = ?';
+    sql += ` AND l.ticket_id = $${paramIndex++}`;
     values.push(ticketId);
   }
 
   if (userId) {
-    sql += ' AND l.user_id = ?';
+    sql += ` AND l.user_id = $${paramIndex++}`;
     values.push(userId);
   }
 
-  sql += ' ORDER BY l.created_at DESC LIMIT ?';
+  sql += ` ORDER BY l.created_at DESC LIMIT $${paramIndex}`;
   values.push(limit);
 
   const [rows] = await pool.query(sql, values);

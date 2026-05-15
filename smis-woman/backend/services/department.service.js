@@ -22,7 +22,7 @@ const getAll = async () => {
 
 const getById = async (id) => {
   const [rows] = await pool.query(
-    'SELECT * FROM departments WHERE id = ?',
+    'SELECT * FROM departments WHERE id = $1',
     [id]
   );
 
@@ -36,7 +36,8 @@ const getById = async (id) => {
 const create = async ({ name, manager_id, is_active = 1 }, adminId) => {
   const [result] = await pool.query(
     `INSERT INTO departments (name, manager_id, is_active)
-     VALUES (?, ?, ?)`,
+     VALUES ($1, $2, $3)
+     RETURNING id`,
     [name, manager_id || null, is_active ? 1 : 0]
   );
 
@@ -46,16 +47,17 @@ const create = async ({ name, manager_id, is_active = 1 }, adminId) => {
     details: `Department "${name}" created.`
   });
 
-  return { id: result.insertId, name };
+  return { id: result.id, name };
 };
 
 const update = async (id, data, adminId) => {
   const fields = [];
   const values = [];
+  let paramIndex = 1;
 
   ['name', 'manager_id', 'is_active'].forEach((field) => {
     if (Object.prototype.hasOwnProperty.call(data, field)) {
-      fields.push(`${field} = ?`);
+      fields.push(`${field} = $${paramIndex++}`);
       values.push(data[field] === '' ? null : data[field]);
     }
   });
@@ -67,11 +69,11 @@ const update = async (id, data, adminId) => {
   values.push(id);
 
   const [result] = await pool.query(
-    `UPDATE departments SET ${fields.join(', ')} WHERE id = ?`,
+    `UPDATE departments SET ${fields.join(', ')} WHERE id = $${paramIndex}`,
     values
   );
 
-  if (result.affectedRows === 0) {
+  if (result.rowCount === 0) {
     throw { status: 404, message: 'Department not found.' };
   }
 
@@ -86,7 +88,7 @@ const update = async (id, data, adminId) => {
 
 const remove = async (id, adminId) => {
   await pool.query(
-    'UPDATE departments SET is_active = 0 WHERE id = ?',
+    'UPDATE departments SET is_active = 0 WHERE id = $1',
     [id]
   );
 

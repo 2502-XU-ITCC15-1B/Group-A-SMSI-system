@@ -2,13 +2,10 @@ const pool = require('../config/db');
 const logService = require('./log.service');
 const mailService = require('./mail.service');
 
-// ── generateWorkOrderId ────────────────────────────────
-// Produces a unique, human-readable ID: WO-2026-0042
-// -------------------------------------------------------
 const generateWorkOrderId = async () => {
   const year = new Date().getFullYear();
   const [rows] = await pool.query(
-    'SELECT COUNT(*) AS total FROM tickets WHERE YEAR(created_at) = ?',
+    'SELECT COUNT(*) AS total FROM tickets WHERE EXTRACT(YEAR FROM created_at) = $1',
     [year]
   );
 
@@ -36,35 +33,36 @@ const BASE_SELECT = `
 const getAll = async (user, filters = {}) => {
   let sql = BASE_SELECT + ' WHERE t.is_deleted = 0';
   const values = [];
+  let paramIndex = 1;
 
   if (user.role === 'client') {
-    sql += ' AND t.company_id = ?';
+    sql += ` AND t.company_id = $${paramIndex++}`;
     values.push(user.company_id);
   } else if (user.role === 'technician') {
-    sql += ' AND t.technician_id = ?';
+    sql += ` AND t.technician_id = $${paramIndex++}`;
     values.push(user.id);
   } else if (user.role === 'head') {
-    sql += ' AND (t.department_id = ? OR t.department_id IS NULL)';
+    sql += ` AND (t.department_id = $${paramIndex++} OR t.department_id IS NULL)`;
     values.push(user.department_id || null);
   }
 
   if (filters.status) {
-    sql += ' AND t.status = ?';
+    sql += ` AND t.status = $${paramIndex++}`;
     values.push(filters.status);
   }
 
   if (filters.priority) {
-    sql += ' AND t.priority = ?';
+    sql += ` AND t.priority = $${paramIndex++}`;
     values.push(filters.priority);
   }
 
   if (filters.company_id && user.role === 'admin') {
-    sql += ' AND t.company_id = ?';
+    sql += ` AND t.company_id = $${paramIndex++}`;
     values.push(filters.company_id);
   }
 
   if (filters.department_id && (user.role === 'admin' || user.role === 'head')) {
-    sql += ' AND t.department_id = ?';
+    sql += ` AND t.department_id = $${paramIndex++}`;
     values.push(filters.department_id);
   }
 
@@ -85,7 +83,7 @@ const getMine = async (user) => {
 // Fetch single ticket with strict access control
 // -------------------------------------------------------
 const getById = async (id, user) => {
-  const [rows] = await pool.query(BASE_SELECT + ' WHERE t.id = ? AND t.is_deleted = 0', [id]);
+  const [rows] = await pool.query(BASE_SELECT + ' WHERE t.id = $1 AND t.is_deleted = 0', [id]);
 
   if (rows.length === 0) {
     throw { status: 404, message: 'Ticket not found.' };
@@ -117,7 +115,8 @@ const create = async (data, user) => {
   const [result] = await pool.query(
     `INSERT INTO tickets
       (work_order_id, title, description, company_id, department_id, requestor_id, priority, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'Open')`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'Open')
+     RETURNING id`,
     [
       work_order_id,
       data.title,
@@ -130,13 +129,13 @@ const create = async (data, user) => {
   );
 
   await logService.record({
-    ticketId: result.insertId,
+    ticketId: result.id,
     userId: user.id,
     action: 'TICKET_CREATED',
     details: `Work order ${work_order_id} created.`
   });
 
-  return { id: result.insertId, work_order_id };
+  return { id: result.id, work_order_id };
 };
 
 // ── update ─────────────────────────────────────────────
@@ -145,15 +144,15 @@ const create = async (data, user) => {
 const update = async (ticketId, data, user) => {
   const [result] = await pool.query(
     `UPDATE tickets
-     SET title = COALESCE(?, title),
-         description = COALESCE(?, description),
-         priority = COALESCE(?, priority),
-         department_id = COALESCE(?, department_id)
-     WHERE id = ?`,
+     SET title = COALESCE($1, title),
+         description = COALESCE($2, description),
+         priority = COALESCE($3, priority),
+         department_id = COALESCE($4, department_id)
+     WHERE id = $5`,
     [data.title || null, data.description || null, data.priority || null, data.department_id ?? null, ticketId]
   );
 
-  if (result.affectedRows === 0) {
+  if (result.rowCount === 0) {
     throw { status: 404, message: 'Ticket not found.' };
   }
 
@@ -183,14 +182,14 @@ const updateStatus = async (ticketId, status, user) => {
 
   const [result] = await pool.query(
     `UPDATE tickets
-     SET status = ?,
-         resolved_at = CASE WHEN ? = 'Resolved' THEN NOW() ELSE resolved_at END,
-         closed_at   = CASE WHEN ? = 'Closed' THEN NOW() ELSE closed_at END
-     WHERE id = ?`,
-    [status, status, status, ticketId]
+     SET status = $1,
+         resolved_at = CASE WHEN $1 = 'Resolved' THEN NOW() ELSE resolved_at END,
+         closed_at   = CASE WHEN $1 = 'Closed' THEN NOW() ELSE closed_at END
+     WHERE id = $2`,
+    [status, ticketId]
   );
 
-  if (result.affectedRows === 0) {
+  if (result.rowCount === 0) {
     throw { status: 404, message: 'Ticket not found.' };
   }
 
@@ -221,14 +220,14 @@ const assign = async (ticketId, data, user) => {
 
   const [result] = await pool.query(
     `UPDATE tickets
-     SET technician_id = COALESCE(?, technician_id),
-         department_id = COALESCE(?, department_id),
+     SET technician_id = COALESCE($1, technician_id),
+         department_id = COALESCE($2, department_id),
          status = 'Assigned'
-     WHERE id = ?`,
+     WHERE id = $3`,
     [technicianId, departmentId, ticketId]
   );
 
-  if (result.affectedRows === 0) {
+  if (result.rowCount === 0) {
     throw { status: 404, message: 'Ticket not found.' };
   }
 
@@ -250,7 +249,7 @@ const close = async (ticketId, user) => {
     `SELECT t.*, u.email AS requester_email, u.name AS requester_name
      FROM tickets t
      LEFT JOIN users u ON u.id = t.requestor_id
-     WHERE t.id = ?`,
+     WHERE t.id = $1`,
     [ticketId]
   );
 
@@ -263,7 +262,7 @@ const close = async (ticketId, user) => {
   await pool.query(
     `UPDATE tickets
      SET status = 'Closed', closed_at = NOW()
-     WHERE id = ?`,
+     WHERE id = $1`,
     [ticketId]
   );
 
@@ -299,7 +298,7 @@ const addResponse = async (ticketId, data, user) => {
 
   await pool.query(
     `INSERT INTO ticket_responses (ticket_id, user_id, message, internal_note, attachment_url)
-     VALUES (?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5)`,
     [ticketId, user.id, message, data.internal_note ? 1 : 0, data.attachment_url || null]
   );
 
@@ -323,7 +322,7 @@ const getResponses = async (ticketId, user) => {
     `SELECT r.*, u.name AS author_name, u.role AS author_role
      FROM ticket_responses r
      JOIN users u ON u.id = r.user_id
-     WHERE r.ticket_id = ?
+     WHERE r.ticket_id = $1
      ORDER BY r.created_at ASC`,
     [ticketId]
   );
@@ -336,7 +335,7 @@ const getResponses = async (ticketId, user) => {
 // -------------------------------------------------------
 const remove = async (ticketId, user) => {
   await pool.query(
-    'UPDATE tickets SET is_deleted = 1 WHERE id = ?',
+    'UPDATE tickets SET is_deleted = 1 WHERE id = $1',
     [ticketId]
   );
 
