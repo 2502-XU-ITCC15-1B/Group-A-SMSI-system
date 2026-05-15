@@ -30,9 +30,8 @@ app.use(cors({
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Serve frontend static assets from the sibling frontend directory
-const frontendPath = path.join(__dirname, '../frontend');
-app.use(express.static(frontendPath));
+// ── Serve frontend static files ────────────────────────────
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
 // ── Health check (public — no auth required) ───────────────
 app.get('/api/health', (req, res) => {
@@ -63,16 +62,10 @@ app.use('/api/*', (req, res) => {
   });
 });
 
-// Serve frontend routes for any non-API request
+// ── SPA fallback — serve index.html for all other routes ───
+// This allows frontend routing (React Router, etc.) to work
 app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({
-      success: false,
-      message: `Route not found: ${req.originalUrl}`
-    });
-  }
-
-  res.sendFile(path.join(frontendPath, 'index.html'));
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 });
  
 // ── Global error handler ───────────────────────────────────

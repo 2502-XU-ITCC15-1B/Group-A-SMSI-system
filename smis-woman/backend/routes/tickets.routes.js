@@ -2,6 +2,7 @@ const express      = require('express');
 const multer       = require('multer');
 const path         = require('path');
 const router       = express.Router();
+const pool         = require('../config/db');
 const ticketService = require('../services/ticket.service');
 const { authenticate, authorize } = require('../middleware/auth');
 
@@ -244,8 +245,18 @@ router.post('/:id/assign-dept', authenticate, authorize('admin'), async (req, re
     const { department_id } = req.body;
     const ticketId = req.params.id;
 
-    // Gigamit nato ang existing 'assign' function sa imong ticket.service.js
-    const result = await ticketService.assign(ticketId, { department_id }, req.user);
+    // Query the department's manager
+    const [dept] = await pool.query('SELECT manager_id FROM departments WHERE id = $1', [department_id]);
+    if (dept.length === 0) {
+      throw { status: 400, message: 'Department not found.' };
+    }
+    const technician_id = dept[0].manager_id;
+    if (!technician_id) {
+      throw { status: 400, message: 'Department has no manager assigned.' };
+    }
+
+    // Assign to department and department head
+    const result = await ticketService.assign(ticketId, { department_id, technician_id }, req.user);
 
     res.json(result);
   } catch (err) {

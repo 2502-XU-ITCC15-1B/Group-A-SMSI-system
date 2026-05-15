@@ -214,7 +214,7 @@ const assign = async (ticketId, data, user) => {
     throw { status: 400, message: 'technician_id or department_id is required.' };
   }
 
-  if (user.role === 'admin' && technicianId) {
+  if (user.role === 'admin' && technicianId && !departmentId) {
     throw { status: 403, message: 'Admins may only forward tickets to department heads. Department heads assign technicians.' };
   }
 
