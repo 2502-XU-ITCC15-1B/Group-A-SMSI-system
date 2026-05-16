@@ -15,6 +15,8 @@ const departmentRoutes = require('./routes/departments.routes');
 const logRoutes        = require('./routes/logs.routes');
 const profileRoutes    = require('./routes/profile.routes');
 const adminRoutes      = require('./routes/admin.routes');
+const { authenticate, authorize } = require('./middleware/auth');
+const ticketService = require('./services/ticket.service');
  
 // ── App setup ──────────────────────────────────────────────
 const app = express();
@@ -27,6 +29,14 @@ app.use(cors({
 }));
  
 app.use(express.json());
+
+// Simple API request logger to aid debugging routes
+app.use((req, res, next) => {
+  if (String(req.originalUrl || '').startsWith('/api/')) {
+    console.log(`[API REQ] ${req.method} ${req.originalUrl} - Auth: ${req.headers.authorization ? 'present' : 'none'}`);
+  }
+  next();
+});
  
 // ── Health check (public — no auth required) ───────────────
 app.get('/api/health', (req, res) => {
@@ -49,8 +59,41 @@ app.use('/api/logs',        logRoutes);
 app.use('/api/profile',     profileRoutes);
 app.use('/api/admin',       adminRoutes);
  
+// Fallback DELETE handler for ticket response removals.
+// This catches malformed or variant DELETE requests that might not match
+// the router (helps older frontends or unexpected URL shapes). It still
+// enforces authentication and admin authorization before delegating.
+app.delete('/api/tickets/*', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const url = req.originalUrl || '';
+    // match /api/tickets/:id/responses/:responseId
+    // match /api/tickets/:id/responses/:responseId (accept non-numeric ids too)
+    const m = url.match(/\/tickets\/([^\/]+)\/responses\/([^\/]+)/i);
+    if (m) {
+      const ticketId = decodeURIComponent(m[1]);
+      const responseId = decodeURIComponent(m[2]);
+      const result = await ticketService.removeResponse(ticketId, responseId, req.user);
+      return res.json(result);
+    }
+
+    // try query/body fallbacks: ?ticketId=1&responseId=6 or JSON body
+    const ticketId = req.query.ticketId || req.query.ticket_id || req.body.ticketId || req.body.ticket_id;
+    const responseId = req.query.responseId || req.query.response_id || req.body.responseId || req.body.response_id;
+    if (ticketId && responseId) {
+      const result = await ticketService.removeResponse(ticketId, responseId, req.user);
+      return res.json(result);
+    }
+
+    // nothing matched — delegate to 404 below
+    return res.status(404).json({ success: false, message: `Route not found: ${req.originalUrl}` });
+  } catch (err) {
+    return res.status(err.status || 500).json({ success: false, message: err.message });
+  }
+});
+
 // ── 404 handler — unknown API routes ──────────────────────
 app.use('/api/*', (req, res) => {
+  console.warn('[API 404] Route not found:', req.method, req.originalUrl, 'Auth:', req.headers.authorization ? 'present' : 'none');
   res.status(404).json({
     success: false,
     message: `Route not found: ${req.originalUrl}`

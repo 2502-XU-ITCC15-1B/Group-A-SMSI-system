@@ -298,15 +298,24 @@ const addResponse = async (ticketId, data, user) => {
 
   await pool.query(
     `INSERT INTO ticket_responses (ticket_id, user_id, message, internal_note, attachment_url)
-     VALUES ($1, $2, $3, $4, $5)`,
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
     [ticketId, user.id, message, data.internal_note ? 1 : 0, data.attachment_url || null]
   );
+
+  // capture inserted response id when available
+  const inserted = await pool.query('SELECT LASTVAL() as id').catch(() => null);
+  let responseId = null;
+  try {
+    if (inserted && inserted.rows && inserted.rows[0]) responseId = inserted.rows[0].id;
+  } catch (e) {
+    responseId = null;
+  }
 
   await logService.record({
     ticketId,
     userId: user.id,
     action: 'RESPONSE_ADDED',
-    details: 'A response was added to the ticket.'
+    details: `Response added; response_id=${responseId}`
   });
 
   return { message: 'Response submitted.' };
@@ -322,12 +331,37 @@ const getResponses = async (ticketId, user) => {
     `SELECT r.*, u.name AS author_name, u.role AS author_role
      FROM ticket_responses r
      JOIN users u ON u.id = r.user_id
-     WHERE r.ticket_id = $1
+     WHERE r.ticket_id = $1 AND r.is_deleted = FALSE
      ORDER BY r.created_at ASC`,
     [ticketId]
   );
 
   return rows;
+};
+
+// Soft-delete a response (admin only)
+const removeResponse = async (ticketId, responseId, adminUser, reason = null) => {
+  await getById(ticketId, adminUser);
+
+  const [rows] = await pool.query(
+    'SELECT r.* FROM ticket_responses r WHERE r.id = $1 AND r.ticket_id = $2',
+    [responseId, ticketId]
+  );
+
+  if (!rows.length) {
+    throw { status: 404, message: 'Response not found.' };
+  }
+
+  await pool.query('UPDATE ticket_responses SET is_deleted = TRUE WHERE id = $1', [responseId]);
+
+  await logService.record({
+    ticketId,
+    userId: adminUser.id,
+    action: 'RESPONSE_REMOVED',
+    details: `Response ${responseId} removed by admin ${adminUser.id}.${reason ? ' Reason: ' + reason : ''}`
+  });
+
+  return { success: true, message: 'Response removed.' };
 };
 
 // ── remove ─────────────────────────────────────────────

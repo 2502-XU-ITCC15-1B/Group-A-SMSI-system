@@ -44,7 +44,17 @@ const AdminPortal = (() => {
   async function loadIconSprite() {
     if (document.getElementById('icon-sprite')) return;
 
-    const response = await fetch('/_icons.html').catch(() => fetch('../_icons.html'));
+    const candidates = ['/_icons.html', '../_icons.html', './_icons.html', '_icons.html'];
+    let response = null;
+    for (const path of candidates) {
+      try {
+        response = await fetch(path);
+        if (response && response.ok) break;
+      } catch (e) {
+        response = null;
+      }
+    }
+
     if (!response || !response.ok) {
       throw new Error('Unable to load icon sprite.');
     }
@@ -416,6 +426,7 @@ const AdminPortal = (() => {
           created_at: log.created_at
         })),
         ...responses.map((response) => ({
+          id: response.id,
           type: response.internal_note ? 'internal' : 'response',
           title: response.internal_note ? 'Internal Note' : 'Response',
           actor: response.author_name || 'Unknown User',

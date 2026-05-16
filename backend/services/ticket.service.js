@@ -208,20 +208,43 @@ const updateStatus = async (ticketId, status, user) => {
 // Assigns technician or department to ticket
 // -------------------------------------------------------
 const assign = async (ticketId, data, user) => {
-  const technicianId = data.technician_id || null;
-  const departmentId = data.department_id || null;
+  const hasTechnician = Object.prototype.hasOwnProperty.call(data, 'technician_id');
+  const hasDepartment = Object.prototype.hasOwnProperty.call(data, 'department_id');
 
-  if (!technicianId && !departmentId) {
+  if (!hasTechnician && !hasDepartment) {
     throw { status: 400, message: 'technician_id or department_id is required.' };
   }
 
+  // Build update dynamically so we can explicitly clear technician when forwarding department
+  const updates = [];
+  const params = [];
+
+  // If admin forwarded to a department and did not explicitly provide a technician,
+  // fetch department manager and auto-assign the ticket to that manager (department head).
+  let autoAssignManagerId = null;
+  if (hasDepartment && !hasTechnician && user.role === 'admin') {
+    const [mgrRows] = await pool.query('SELECT manager_id FROM departments WHERE id = ?', [data.department_id]);
+    autoAssignManagerId = mgrRows[0] ? mgrRows[0].manager_id : null;
+  }
+
+  if (hasTechnician || autoAssignManagerId !== null) {
+    updates.push('technician_id = ?');
+    if (hasTechnician) params.push(data.technician_id === null ? null : data.technician_id);
+    else params.push(autoAssignManagerId);
+  }
+
+  if (hasDepartment) {
+    updates.push('department_id = ?');
+    params.push(data.department_id === null ? null : data.department_id);
+  }
+
+  updates.push("status = 'Assigned'");
+
+  params.push(ticketId);
+
   const [result] = await pool.query(
-    `UPDATE tickets
-     SET technician_id = COALESCE(?, technician_id),
-         department_id = COALESCE(?, department_id),
-         status = 'Assigned'
-     WHERE id = ?`,
-    [technicianId, departmentId, ticketId]
+    `UPDATE tickets\n     SET ${updates.join(',\n         ')}\n     WHERE id = ?`,
+    params
   );
 
   if (result.affectedRows === 0) {
@@ -234,6 +257,53 @@ const assign = async (ticketId, data, user) => {
     action: 'TICKET_ASSIGNED',
     details: 'Ticket assignment updated.'
   });
+  // If department was changed, notify the department manager (head)
+  if (hasDepartment) {
+    try {
+      const [deptRows] = await pool.query(
+        `SELECT d.id, d.name AS department_name, u.id AS manager_id, u.email AS manager_email, u.name AS manager_name
+         FROM departments d
+         LEFT JOIN users u ON u.id = d.manager_id
+         WHERE d.id = ?`,
+        [data.department_id]
+      );
+
+      if (deptRows.length) {
+        const dept = deptRows[0];
+        await logService.record({
+          ticketId,
+          userId: user.id,
+          action: 'TICKET_FORWARDED',
+          details: `Forwarded to department ${dept.department_name} (manager id ${dept.manager_id}).`
+        });
+
+        // Send a notification stub to manager if email exists
+        const mailService = require('./mail.service');
+        if (dept.manager_email) {
+          try {
+            const [ticketRows] = await pool.query(
+              'SELECT work_order_id, title FROM tickets WHERE id = ?',
+              [ticketId]
+            );
+            const ticketInfo = ticketRows[0] || {};
+
+            await mailService.sendResolutionEmail({
+              to: dept.manager_email,
+              name: dept.manager_name || 'Manager',
+              workOrderId: ticketInfo.work_order_id || 'Unknown',
+              title: ticketInfo.title || 'Ticket forwarded',
+              resolution: `A ticket has been forwarded to your department: ${dept.department_name}`
+            });
+          } catch (e) {
+            // don't fail the main flow on mail errors
+            console.error('[TicketService] Failed to notify department manager:', e.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[TicketService] Failed post-assign department actions:', e.message);
+    }
+  }
 
   return { success: true, message: 'Ticket assigned.' };
 };
@@ -299,11 +369,14 @@ const addResponse = async (ticketId, data, user) => {
     [ticketId, user.id, message, data.internal_note ? 1 : 0]
   );
 
+  const [res] = await pool.query('SELECT LAST_INSERT_ID() as id');
+  const responseId = res && res[0] ? res[0].id : null;
+
   await logService.record({
     ticketId,
     userId: user.id,
     action: 'RESPONSE_ADDED',
-    details: 'A response was added to the ticket.'
+    details: `Response added; response_id=${responseId}`
   });
 
   return { message: 'Response submitted.' };
@@ -315,14 +388,14 @@ const addResponse = async (ticketId, data, user) => {
 const getResponses = async (ticketId, user) => {
   await getById(ticketId, user);
 
-  const [rows] = await pool.query(
-    `SELECT r.*, u.name AS author_name, u.role AS author_role
-     FROM ticket_responses r
-     JOIN users u ON u.id = r.user_id
-     WHERE r.ticket_id = ?
-     ORDER BY r.created_at ASC`,
-    [ticketId]
-  );
+      const [rows] = await pool.query(
+        `SELECT r.*, u.name AS author_name, u.role AS author_role
+         FROM ticket_responses r
+         JOIN users u ON u.id = r.user_id
+         WHERE r.ticket_id = ? AND r.is_deleted = 0
+         ORDER BY r.created_at ASC`,
+        [ticketId]
+      );
 
   return rows;
 };
@@ -357,5 +430,32 @@ module.exports = {
   close,
   addResponse,
   getResponses,
-  remove
+  // Soft-delete a response (admin only)
+  removeResponse: async (ticketId, responseId, adminUser, reason = null) => {
+    // validate ticket access
+    await getById(ticketId, adminUser);
+
+    const [rows] = await pool.query(
+      'SELECT r.*, r.ticket_id, r.user_id FROM ticket_responses r WHERE r.id = ? AND r.ticket_id = ?',
+      [responseId, ticketId]
+    );
+
+    if (!rows.length) {
+      throw { status: 404, message: 'Response not found.' };
+    }
+
+    await pool.query(
+      'UPDATE ticket_responses SET is_deleted = 1 WHERE id = ?',
+      [responseId]
+    );
+
+    await logService.record({
+      ticketId,
+      userId: adminUser.id,
+      action: 'RESPONSE_REMOVED',
+      details: `Response ${responseId} removed by admin ${adminUser.id}.${reason ? ' Reason: ' + reason : ''}`
+    });
+
+    return { success: true, message: 'Response removed.' };
+  },
 };

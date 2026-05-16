@@ -38,6 +38,30 @@ const users = [
     department_id: 1
   },
   {
+    name: 'HR Head',
+    email: 'head-hr@smsi.com',
+    password: 'HeadHR@2026',
+    role: 'head',
+    company_id: null,
+    department_id: 2
+  },
+  {
+    name: 'Facilities Head',
+    email: 'head-fac@smsi.com',
+    password: 'HeadFAC@2026',
+    role: 'head',
+    company_id: null,
+    department_id: 3
+  },
+  {
+    name: 'Finance Head',
+    email: 'head-fin@smsi.com',
+    password: 'HeadFIN@2026',
+    role: 'head',
+    company_id: null,
+    department_id: 4
+  },
+  {
     name: 'John Reyes',
     email: 'client@testco.com',
     password: 'Client@2026',
@@ -67,12 +91,10 @@ const companies = [
 // DEPARTMENTS
 // ------------------------------------------------------------
 const departments = [
-  {
-    id: 1,
-    name: 'IT Support',
-    manager_id: 3,
-    is_active: 1
-  }
+  { id: 1, name: 'IT Support', manager_email: 'head@smsi.com', is_active: 1 },
+  { id: 2, name: 'HR Support', manager_email: 'head-hr@smsi.com', is_active: 1 },
+  { id: 3, name: 'Facilities', manager_email: 'head-fac@smsi.com', is_active: 1 },
+  { id: 4, name: 'Finance', manager_email: 'head-fin@smsi.com', is_active: 1 }
 ];
 
 // ------------------------------------------------------------
@@ -127,6 +149,13 @@ const logs = [
 
     // ---------------- USERS ----------------
     for (const u of users) {
+      // normalize and validate
+      u.name = String(u.name || '').trim();
+      u.email = String(u.email || '').trim().toLowerCase();
+      if (!u.email || !u.email.includes('@')) {
+        throw new Error(`Invalid user email in seed data: ${u.email}`);
+      }
+
       const hash = await bcrypt.hash(u.password, SALT_ROUNDS);
 
       await pool.query(
@@ -143,14 +172,16 @@ const logs = [
       );
     }
 
+    // map inserted user emails to IDs (build dynamic placeholders)
+    const userEmails = users.map((user) => String(user.email || '').trim().toLowerCase());
+    const userPlaceholders = userEmails.map(() => '?').join(', ');
     const [seedUsers] = await pool.query(
-      `SELECT id, email FROM users
-       WHERE email IN (?, ?, ?, ?)`,
-      users.map((user) => user.email)
+      `SELECT id, email FROM users WHERE email IN (${userPlaceholders})`,
+      userEmails
     );
 
     userIds = seedUsers.reduce((map, user) => {
-      map[user.email] = user.id;
+      map[String(user.email).trim().toLowerCase()] = user.id;
       return map;
     }, {});
 
@@ -166,6 +197,7 @@ const logs = [
 
     // ---------------- DEPARTMENTS ----------------
     for (const d of departments) {
+      const managerId = userIds[String(d.manager_email || '').trim().toLowerCase()] || null;
       await pool.query(
         `INSERT INTO departments (id, name, manager_id, is_active)
          VALUES (?, ?, ?, ?)
@@ -173,7 +205,7 @@ const logs = [
            name = VALUES(name),
            manager_id = VALUES(manager_id),
            is_active = VALUES(is_active)`,
-        [d.id, d.name, userIds['head@smsi.com'], d.is_active]
+        [d.id, d.name, managerId, d.is_active]
       );
     }
 

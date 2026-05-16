@@ -222,6 +222,21 @@ async function submitResponse(ticketId, message, internal_note = false) {
   });
 }
 
+async function deleteResponse(ticketId, responseId) {
+  if (!ticketId || !responseId) {
+    console.error('[deleteResponse] invalid ids', { ticketId, responseId });
+    return { success: false, message: 'Invalid ticket or response id.' };
+  }
+
+  const t = encodeURIComponent(String(ticketId));
+  const r = encodeURIComponent(String(responseId));
+  const path = `/tickets/${t}/responses/${r}`;
+
+  return await apiRequest(path, {
+    method: 'DELETE'
+  });
+}
+
 async function submitFeedback(ticketId, rating, feedback) {
   return await apiRequest(`/tickets/${ticketId}/feedback`, {
     method: 'POST',

@@ -4,9 +4,8 @@ let currentPage = 1;
 const perPage = 8;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!requireRole('client')) return;
-
   await ClientPortal.hydrateClientSession();
+  if (!requireRole('client')) return;
   ClientPortal.initPage({
     activeNav: 'requests',
     title: 'My Requests',

@@ -6,6 +6,15 @@
   <title>Admin Dashboard</title>
   <link rel="stylesheet" href="/styles/global.css">
   <script src="/js/config.js"></script>
+  <script>
+    if ((location.hostname === 'localhost' || location.hostname === '127.0.0.1') && !window.FORCE_API_BASE_SET) {
+      window.APP_CONFIG = window.APP_CONFIG || {};
+      window.APP_CONFIG.API_BASE_URL = 'http://localhost:5000/api';
+      window.API_BASE_URL = window.APP_CONFIG.API_BASE_URL;
+      window.FORCE_API_BASE_SET = true;
+      console.debug('[CONFIG OVERRIDE] API_BASE_URL set to', window.API_BASE_URL);
+    }
+  </script>
   <script src="/js/api.js"></script>
   <script src="/admin/admin.js" defer></script>
 </head>

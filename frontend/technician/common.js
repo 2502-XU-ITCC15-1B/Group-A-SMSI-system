@@ -45,7 +45,17 @@ window.TechnicianPortal = (() => {
   async function loadIconSprite() {
     if (document.getElementById('icon-sprite')) return;
 
-    const response = await fetch('/_icons.html').catch(() => null);
+    const candidates = ['/_icons.html', '../_icons.html', './_icons.html', '_icons.html'];
+    let response = null;
+    for (const path of candidates) {
+      try {
+        response = await fetch(path);
+        if (response && response.ok) break;
+      } catch (e) {
+        response = null;
+      }
+    }
+
     if (!response?.ok) return;
 
     document.body.insertAdjacentHTML('afterbegin', await response.text());

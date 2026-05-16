@@ -1,8 +1,4 @@
--- ============================================================
--- WOMAN System — Complete Database Schema
--- Solutions Management Systems Inc. (SMSi)
--- ============================================================
-
+-- 1. Use the configured backend database name
 CREATE DATABASE IF NOT EXISTS woman_db;
 USE woman_db;
 
@@ -32,7 +28,7 @@ CREATE TABLE IF NOT EXISTS departments (
 );
 
 -- ============================================================
--- TABLE 3: users
+-- TABLE 3: users (Naggamit og password_hash para sa security)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -55,7 +51,7 @@ CREATE TABLE IF NOT EXISTS users (
     ON DELETE SET NULL
 );
 
--- Add FK after users exists (circular reference)
+-- Add connection between department and manager AFTER users exists
 ALTER TABLE departments
   ADD CONSTRAINT fk_departments_manager
   FOREIGN KEY (manager_id) REFERENCES users(id)
@@ -69,18 +65,14 @@ CREATE TABLE IF NOT EXISTS tickets (
   work_order_id VARCHAR(30) NOT NULL UNIQUE,
   title VARCHAR(255) NOT NULL,
   description TEXT NULL,
-
   priority ENUM('Low','Medium','High','Critical') NOT NULL DEFAULT 'Medium',
   status ENUM('Open','Assigned','In Progress','Resolved','Closed') NOT NULL DEFAULT 'Open',
-
   company_id BIGINT UNSIGNED NULL,
   department_id BIGINT UNSIGNED NULL,
   requestor_id BIGINT UNSIGNED NOT NULL,
   technician_id BIGINT UNSIGNED NULL,
-
   resolution_summary TEXT NULL,
   is_deleted TINYINT(1) NOT NULL DEFAULT 0,
-
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   resolved_at TIMESTAMP NULL,
@@ -112,6 +104,7 @@ CREATE TABLE IF NOT EXISTS ticket_responses (
   user_id BIGINT UNSIGNED NOT NULL,
   message TEXT NOT NULL,
   internal_note TINYINT(1) NOT NULL DEFAULT 0,
+  is_deleted TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   CONSTRAINT fk_responses_ticket
@@ -165,7 +158,7 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 
 -- ============================================================
 -- TABLE 8: password_resets
--- ============================================================
+-- ============================
 CREATE TABLE IF NOT EXISTS password_resets (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,

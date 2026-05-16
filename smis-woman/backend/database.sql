@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS ticket_responses (
   message TEXT NOT NULL,
   internal_note BOOLEAN NOT NULL DEFAULT FALSE,
   attachment_url VARCHAR(255) NULL,
+  is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   CONSTRAINT fk_responses_ticket

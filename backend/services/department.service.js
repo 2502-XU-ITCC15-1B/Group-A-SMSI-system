@@ -34,10 +34,23 @@ const getById = async (id) => {
 };
 
 const create = async ({ name, manager_id, is_active = 1 }, adminId) => {
+  const trimmedName = String(name || '').trim();
+  if (!trimmedName) {
+    throw { status: 400, message: 'Department name is required.' };
+  }
+
+  const [existing] = await pool.query(
+    'SELECT id FROM departments WHERE name = ?',
+    [trimmedName]
+  );
+  if (existing.length > 0) {
+    throw { status: 400, message: 'Department name already exists.' };
+  }
+
   const [result] = await pool.query(
     `INSERT INTO departments (name, manager_id, is_active)
      VALUES (?, ?, ?)`,
-    [name, manager_id || null, is_active ? 1 : 0]
+    [trimmedName, manager_id || null, is_active ? 1 : 0]
   );
 
   await logService.record({
@@ -56,12 +69,30 @@ const update = async (id, data, adminId) => {
   ['name', 'manager_id', 'is_active'].forEach((field) => {
     if (Object.prototype.hasOwnProperty.call(data, field)) {
       fields.push(`${field} = ?`);
-      values.push(data[field] === '' ? null : data[field]);
+      if (field === 'name') {
+        values.push(String(data.name || '').trim());
+      } else {
+        values.push(data[field] === '' ? null : data[field]);
+      }
     }
   });
 
   if (!fields.length) {
     return { success: true, message: 'No department changes submitted.' };
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'name')) {
+    const trimmedName = String(data.name || '').trim();
+    if (!trimmedName) {
+      throw { status: 400, message: 'Department name is required.' };
+    }
+    const [existing] = await pool.query(
+      'SELECT id FROM departments WHERE name = ? AND id != ?',
+      [trimmedName, id]
+    );
+    if (existing.length > 0) {
+      throw { status: 400, message: 'Department name already exists.' };
+    }
   }
 
   values.push(id);

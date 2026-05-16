@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!requireRole('client')) return;
-
   await ClientPortal.hydrateClientSession();
+  if (!requireRole('client')) return;
   ClientPortal.initPage({
     activeNav: 'requests',
     title: 'Ticket Detail',
@@ -74,13 +73,13 @@ async function loadResponses(ticketId) {
   }
 
   list.innerHTML = responses.map((response) => `
-    <article class="response-card">
+    <article class="response-card" data-response-id="${response.id}">
       <div class="response-head">
         <strong>${ClientPortal.escapeHtml(response.author_name || 'Support')}</strong>
         <span class="response-role">${ClientPortal.escapeHtml(response.author_role || '')}</span>
       </div>
       <div class="response-meta">${formatDateTime(response.created_at)}</div>
-      <p>${ClientPortal.escapeHtml(response.message || '')}</p>
+      <div class="response-body"><p>${ClientPortal.escapeHtml(response.message || '')}</p></div>
     </article>
   `).join('');
 }

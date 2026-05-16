@@ -44,7 +44,17 @@ const AdminPortal = (() => {
   async function loadIconSprite() {
     if (document.getElementById('icon-sprite')) return;
 
-    const response = await fetch('/_icons.html').catch(() => fetch('../_icons.html'));
+    const candidates = ['/_icons.html', '../_icons.html', './_icons.html', '_icons.html'];
+    let response = null;
+    for (const path of candidates) {
+      try {
+        response = await fetch(path);
+        if (response && response.ok) break;
+      } catch (e) {
+        response = null;
+      }
+    }
+
     if (!response || !response.ok) {
       throw new Error('Unable to load icon sprite.');
     }
@@ -395,6 +405,7 @@ const AdminPortal = (() => {
           created_at: log.created_at
         })),
         ...responses.map((response) => ({
+          id: response.id,
           type: response.internal_note ? 'internal' : 'response',
           title: response.internal_note ? 'Internal Note' : 'Response',
           actor: response.author_name || 'Unknown User',
@@ -422,7 +433,7 @@ const AdminPortal = (() => {
           <section class="stack">
             <h3 class="section-title">Activity</h3>
             ${timeline.length ? timeline.map((item) => `
-              <article class="timeline-item timeline-item-${item.type}">
+              <article class="timeline-item timeline-item-${item.type}" data-timeline-id="${item.id || ''}">
                 <div class="timeline-item-header">
                   <strong>${escapeHtml(item.title)}</strong>
                   <span class="response-meta">${formatDateTimeLocal(item.created_at)}</span>
@@ -466,15 +477,17 @@ const AdminPortal = (() => {
       </section>
     `);
 
-    const [tickets, companies, technicians] = await Promise.all([
+    const [tickets, companies, technicians, departments] = await Promise.all([
       fetchTickets(),
       fetchCompanies(),
-      fetchTechnicians()
+      fetchTechnicians(),
+      fetchDepartments()
     ]);
 
     state.tickets = tickets;
     state.companies = companies;
     state.technicians = technicians;
+    state.departments = departments;
 
     $('ticketCompanyFilter').innerHTML += companies.map((company) => `<option value="${company.id}">${escapeHtml(company.name)}</option>`).join('');
 
@@ -565,21 +578,22 @@ const AdminPortal = (() => {
     function openAssignTicketModal(ticketId) {
       const ticket = state.tickets.find((item) => String(item.id) === String(ticketId));
       Modal.open({
-        title: 'Assign Ticket',
+        title: 'Forward Ticket',
         subtitle: ticket ? ticket.work_order_id : '',
         body: `
           <form id="assignTicketForm" class="stack">
             <div class="field">
-              <label for="assignTechnicianId">Technician</label>
-              <select id="assignTechnicianId">
-                <option value="">Select technician</option>
-                ${state.technicians.map((tech) => `<option value="${tech.id}" ${String(ticket?.technician_id || '') === String(tech.id) ? 'selected' : ''}>${escapeHtml(tech.name)}${tech.department_name ? ` - ${escapeHtml(tech.department_name)}` : ''}</option>`).join('')}
+              <label for="assignDepartmentId">Department</label>
+              <select id="assignDepartmentId">
+                <option value="">Select department</option>
+                ${state.departments.map((department) => `<option value="${department.id}" ${String(ticket?.department_id || '') === String(department.id) ? 'selected' : ''}>${escapeHtml(department.name)}${department.manager_name ? ` - ${escapeHtml(department.manager_name)}` : ''}</option>`).join('')}
               </select>
             </div>
+            <p class="form-note">Admins forward tickets to department heads. Department heads then assign technicians.</p>
             <p id="assignTicketMessage" class="form-msg"></p>
             <div class="form-actions">
               <button class="btn secondary" data-modal-close type="button">Cancel</button>
-              <button class="btn" id="assignTicketSubmit" type="submit">Assign</button>
+              <button class="btn" id="assignTicketSubmit" type="submit">Forward</button>
             </div>
           </form>
         `
@@ -588,20 +602,20 @@ const AdminPortal = (() => {
       document.querySelector('[data-modal-close]')?.addEventListener('click', () => Modal.close());
       $('assignTicketForm').addEventListener('submit', async (event) => {
         event.preventDefault();
-        const techId = $('assignTechnicianId').value;
-        if (!techId) {
-          setInlineMessage($('assignTicketMessage'), 'Technician selection is required.', 'error');
+        const departmentId = $('assignDepartmentId').value;
+        if (!departmentId) {
+          setInlineMessage($('assignTicketMessage'), 'Department selection is required.', 'error');
           return;
         }
 
-        const result = await assignTicket(ticketId, { technician_id: Number(techId) });
+        const result = await assignTicket(ticketId, { department_id: Number(departmentId) });
         if (result?.success) {
           Modal.close();
-          notify(result.message || 'Ticket assigned.');
+          notify(result.message || 'Ticket forwarded to department head.');
           state.tickets = await fetchTickets();
           render();
         } else {
-          setInlineMessage($('assignTicketMessage'), result?.message || 'Unable to assign ticket.', 'error');
+          setInlineMessage($('assignTicketMessage'), result?.message || 'Unable to forward ticket.', 'error');
         }
       });
     }
@@ -1132,15 +1146,17 @@ const AdminPortal = (() => {
       });
 
       $('adminActivityList').innerHTML = filtered.length ? filtered.map((log) => `
-        <article class="timeline-item timeline-item-log">
+        <article class="timeline-item timeline-item-log" data-log-id="${log.id}">
           <div class="timeline-item-header">
             <strong>${escapeHtml(log.action || 'Activity')}</strong>
             <span class="response-meta">${formatDateTimeLocal(log.created_at)}</span>
           </div>
           <div class="response-role">${escapeHtml(log.user_name || 'System')} ${log.work_order_id ? `- ${escapeHtml(log.work_order_id)}` : ''}</div>
           <p>${escapeHtml(log.details || '')}</p>
+            ${log.action === 'RESPONSE_ADDED' && (getUser() || {}).role === 'admin' ? '' : ''}
         </article>
       `).join('') : '<div class="empty-state">No activity matched the current filters.</div>';
+
     };
 
     $('activitySearch').addEventListener('input', (event) => {

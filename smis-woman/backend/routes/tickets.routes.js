@@ -202,6 +202,18 @@ router.post('/:id/responses', authenticate, authorize('admin', 'head', 'technici
   }
 });
 
+// DELETE /api/tickets/:id/responses/:responseId
+// Roles: admin
+router.delete('/:id/responses/:responseId', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { id, responseId } = req.params;
+    const result = await ticketService.removeResponse(id, responseId, req.user);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message });
+  }
+});
+
 // POST   /api/tickets/:id/feedback
 // Roles: client
 // Body: { rating, feedback }
