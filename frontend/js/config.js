@@ -1,11 +1,10 @@
-const defaultApiBaseUrl = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL;
-// if running on localhost (any port) prefer the backend on port 5000
-const localDevFallback = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? 'http://localhost:5000/api'
-  : '/api';
+// Simple config for plain JavaScript
+const API_BASE_URL = "https://smis-backend-production-a1a5.up.railway.app/api";
 
 window.APP_CONFIG = {
-  API_BASE_URL: defaultApiBaseUrl || localDevFallback
+  API_BASE_URL: API_BASE_URL,
 };
 
 window.API_BASE_URL = window.APP_CONFIG.API_BASE_URL;
+
+console.log("API_BASE_URL configured:", window.API_BASE_URL);
