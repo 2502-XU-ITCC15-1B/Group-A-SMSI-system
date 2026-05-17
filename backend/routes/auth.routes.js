@@ -84,6 +84,13 @@ router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
 
+    if (!email || !String(email).includes('@')) {
+      return res.status(400).json({
+        success: false,
+        message: 'A valid email address is required.'
+      });
+    }
+
     const result = await authService.requestPasswordReset(email);
     res.json({ success: true, ...result });
 
@@ -101,6 +108,13 @@ router.post('/forgot-password', async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, new_password } = req.body;
+
+    if (!token || !String(token).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset token is required.'
+      });
+    }
 
     const result = await authService.resetPassword(token, new_password);
     res.json({ success: true, ...result });

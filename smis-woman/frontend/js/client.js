@@ -188,6 +188,11 @@ window.ClientPortal = (() => {
               <textarea id="ticketDescription" rows="7" required></textarea>
             </div>
 
+            <div class="field">
+              <label for="ticketAttachment">Attachment (optional)</label>
+              <input id="ticketAttachment" type="file" accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx">
+            </div>
+
             <p id="ticketModalMessage" class="form-msg" aria-live="polite"></p>
 
             <div class="form-actions">
@@ -274,7 +279,8 @@ window.ClientPortal = (() => {
     submitBtn.textContent = 'Submitting...';
 
     try {
-      const result = await createTicket(payload);
+      const attachmentFile = document.getElementById('ticketAttachment')?.files?.[0] || null;
+      const result = await createTicket(payload, attachmentFile);
 
       if (!result?.success) {
         setModalMessage(result?.message || 'Unable to create ticket.', 'error');

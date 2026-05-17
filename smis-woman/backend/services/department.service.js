@@ -1,6 +1,45 @@
 const pool = require('../config/db');
 const logService = require('./log.service');
 
+const DEPARTMENT_KEYWORDS = [
+  'department', 'support', 'hr', 'it', 'billing', 'finance', 'accounts',
+  'operations', 'facilities', 'security', 'compliance', 'customer', 'technical',
+  'sales', 'procurement', 'logistics', 'service', 'administration', 'staff'
+];
+
+function normalizeName(value) {
+  return String(value || '').trim();
+}
+
+function looksLikeAcronym(name) {
+  return /^[A-Z]{2,5}$/.test(name);
+}
+
+function isValidDepartmentName(name) {
+  const normalized = normalizeName(name);
+  if (!normalized) return false;
+
+  const lower = normalized.toLowerCase();
+  if (looksLikeAcronym(normalized) && ['hr', 'it', 'qa', 'ux', 'ui', 'pr'].includes(lower)) {
+    return true;
+  }
+
+  return DEPARTMENT_KEYWORDS.some((keyword) => lower.includes(keyword));
+}
+
+async function validateDepartmentName(name) {
+  const trimmedName = normalizeName(name);
+  if (!trimmedName) {
+    throw { status: 400, message: 'Department name is required.' };
+  }
+
+  if (!isValidDepartmentName(trimmedName)) {
+    throw { status: 400, message: 'Department name must be a valid department, such as IT Support, HR, Billing, or Technical Support.' };
+  }
+
+  return trimmedName;
+}
+
 // -------------------------------------------------------
 // Business logic for managing departments (admin-only).
 // -------------------------------------------------------
@@ -34,11 +73,12 @@ const getById = async (id) => {
 };
 
 const create = async ({ name, manager_id, is_active = 1 }, adminId) => {
+  const trimmedName = await validateDepartmentName(name);
   const [result] = await pool.query(
     `INSERT INTO departments (name, manager_id, is_active)
      VALUES ($1, $2, $3)
      RETURNING id`,
-    [name, manager_id || null, is_active ? 1 : 0]
+    [trimmedName, manager_id || null, is_active ? 1 : 0]
   );
 
   await logService.record({
@@ -54,6 +94,10 @@ const update = async (id, data, adminId) => {
   const fields = [];
   const values = [];
   let paramIndex = 1;
+
+  if (Object.prototype.hasOwnProperty.call(data, 'name')) {
+    data.name = await validateDepartmentName(data.name);
+  }
 
   ['name', 'manager_id', 'is_active'].forEach((field) => {
     if (Object.prototype.hasOwnProperty.call(data, field)) {

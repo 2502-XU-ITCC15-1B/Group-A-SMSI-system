@@ -79,9 +79,57 @@ async function loadResponses(ticketId) {
         <span class="response-role">${ClientPortal.escapeHtml(response.author_role || '')}</span>
       </div>
       <div class="response-meta">${formatDateTime(response.created_at)}</div>
-      <div class="response-body"><p>${ClientPortal.escapeHtml(response.message || '')}</p></div>
+      <div class="response-body">
+        <p>${ClientPortal.escapeHtml(response.message || '')}</p>
+        ${response.attachment_url ? renderAttachmentHtml(response.attachment_url, response.attachment_type) : ''}
+      </div>
     </article>
   `).join('');
+}
+
+function buildAttachmentUrl(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url, window.location.href);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+  } catch (e) {}
+
+  const apiBase = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
+  if (apiBase) {
+    const cleaned = apiBase.replace(/\/api\/?$/i, '');
+    return `${cleaned}${url}`;
+  }
+
+  return `${window.location.origin}${url}`;
+}
+
+function getAttachmentExtension(url) {
+  try {
+    const parsed = new URL(url, window.location.href);
+    url = parsed.pathname;
+  } catch (e) {
+    // ignore malformed URL
+  }
+
+  const parts = url.split('.');
+  return parts.length > 1 ? parts.pop().toLowerCase() : '';
+}
+
+function isImageAttachment(url) {
+  const ext = getAttachmentExtension(url);
+  return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(ext);
+}
+
+function renderAttachmentHtml(url, attachmentType) {
+  const fullUrl = ClientPortal.escapeHtml(buildAttachmentUrl(url));
+  const fileName = decodeURIComponent((url.split('/').pop() || 'attachment'));
+  const label = '<p class="attachment-label">This user has sent an attachment, along with the ticket</p>';
+
+  if (attachmentType === 'image' || (attachmentType == null && isImageAttachment(url))) {
+    return `${label}<div class="timeline-attachment-wrap"><img class="timeline-attachment" src="${fullUrl}" alt="attachment"><p><a class="response-attachment" href="${fullUrl}" target="_blank" rel="noopener">Open attachment</a></p></div>`;
+  }
+
+  return `${label}<div class="timeline-attachment-wrap"><p><a class="attachment-file-link" href="${fullUrl}" target="_blank" rel="noopener">Download attachment: ${ClientPortal.escapeHtml(fileName)}</a></p></div>`;
 }
 
 function bindResponseForm(ticketId) {
@@ -93,6 +141,8 @@ function bindResponseForm(ticketId) {
     event.preventDefault();
 
     const text = document.getElementById('message').value.trim();
+    const attachmentInput = document.getElementById('responseAttachment');
+    const attachmentFile = attachmentInput?.files?.[0] || null;
 
     if (!text) {
       setResponseMessage(message, 'Message is required.', 'error');
@@ -104,7 +154,7 @@ function bindResponseForm(ticketId) {
     setResponseMessage(message, '');
 
     try {
-      const result = await submitResponse(ticketId, text);
+      const result = await submitResponse(ticketId, text, false, attachmentFile);
 
       if (!result?.success) {
         setResponseMessage(message, result?.message || 'Unable to send response.', 'error');
@@ -112,6 +162,7 @@ function bindResponseForm(ticketId) {
       }
 
       form.reset();
+      if (attachmentInput) attachmentInput.value = '';
       setResponseMessage(message, 'Response sent successfully.', 'success');
       await loadResponses(ticketId);
     } finally {

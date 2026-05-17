@@ -13,6 +13,7 @@ if (!apiBaseUrl) {
    SESSION HANDLING
 =========================================================== */
 const sessionKeys = ['woman_token', 'woman_user', 'woman_role'];
+const TOKEN_EXP_KEY = 'woman_token_exp';
 
 function storageGet(key) {
   return localStorage.getItem(key) || sessionStorage.getItem(key);
@@ -28,6 +29,8 @@ function storageRemoveSession() {
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
   });
+  // clear stored token expiry and any scheduled auto-logout
+  try { clearAutoLogout(); } catch (_) {}
 }
 
 const getToken = () => storageGet('woman_token');
@@ -44,11 +47,64 @@ const saveSession = (token, user) => {
   storageSet('woman_token', token);
   storageSet('woman_user', JSON.stringify(user));
   storageSet('woman_role', user.role);
+  // schedule auto-logout based on token expiry
+  try { scheduleAutoLogout(token); } catch (_) {}
 };
 
 function logout() {
   storageRemoveSession();
   window.location.href = '/login.html';
+}
+
+function saveTokenExpiry(exp) {
+  if (!exp) return;
+  storageSet(TOKEN_EXP_KEY, String(exp));
+}
+
+function clearAutoLogout() {
+  if (window._woman_logout_timeout) {
+    clearTimeout(window._woman_logout_timeout);
+    window._woman_logout_timeout = null;
+  }
+  localStorage.removeItem(TOKEN_EXP_KEY);
+  sessionStorage.removeItem(TOKEN_EXP_KEY);
+}
+
+function parseJwt(token) {
+  try {
+    const part = (token || '').split('.')[1];
+    if (!part) return null;
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(Array.prototype.map.call(atob(b64), c => '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+}
+
+function scheduleAutoLogout(token) {
+  clearAutoLogout();
+  if (!token) return;
+  const payload = parseJwt(token);
+  if (!payload || !payload.exp) return;
+  saveTokenExpiry(payload.exp);
+  const ms = payload.exp * 1000 - Date.now();
+  if (ms <= 0) {
+    // already expired
+    logout();
+    return;
+  }
+  // add small buffer
+  window._woman_logout_timeout = setTimeout(() => {
+    try { alert('Session expired. You will be logged out.'); } catch (_) {}
+    logout();
+  }, ms + 1000);
+}
+
+function isTokenExpired() {
+  const exp = Number(storageGet(TOKEN_EXP_KEY));
+  if (!exp) return true;
+  return Date.now() >= exp * 1000;
 }
 
 function saveUserSession(user) {
@@ -61,6 +117,12 @@ function saveUserSession(user) {
 =========================================================== */
 async function apiRequest(path, options = {}) {
   const token = getToken();
+
+  // if token exists but is expired, force logout immediately
+  if (token && isTokenExpired()) {
+    try { logout(); } catch (_) {}
+    return null;
+  }
 
   const headers = {
     ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
@@ -148,6 +210,13 @@ async function resetPassword(token, new_password) {
   });
 }
 
+async function submitPasswordRecoveryRequest(email) {
+  return await apiRequest('/password-recovery', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  });
+}
+
 /* ===========================================================
    TICKETS
 =========================================================== */
@@ -167,7 +236,23 @@ async function fetchTicket(id) {
   return res?.ticket || null;
 }
 
-async function createTicket(payload) {
+async function createTicket(payload, attachmentFile) {
+  if (attachmentFile) {
+    const formData = new FormData();
+    formData.append('title', payload.title);
+    formData.append('description', payload.description);
+    formData.append('priority', payload.priority);
+    if (payload.requestor_id) formData.append('requestor_id', payload.requestor_id);
+    if (payload.client_id) formData.append('client_id', payload.client_id);
+    if (payload.company_id) formData.append('company_id', payload.company_id);
+    if (payload.department_id) formData.append('department_id', payload.department_id);
+    formData.append('attachment', attachmentFile);
+    return await apiRequest('/tickets', {
+      method: 'POST',
+      body: formData
+    });
+  }
+
   return await apiRequest('/tickets', {
     method: 'POST',
     body: JSON.stringify(payload)
@@ -215,7 +300,18 @@ async function fetchResponses(ticketId) {
   return res?.responses || [];
 }
 
-async function submitResponse(ticketId, message, internal_note = false) {
+async function submitResponse(ticketId, message, internal_note = false, attachmentFile = null) {
+  if (attachmentFile) {
+    const formData = new FormData();
+    formData.append('message', message);
+    formData.append('internal_note', internal_note ? '1' : '0');
+    formData.append('attachment', attachmentFile);
+    return await apiRequest(`/tickets/${ticketId}/responses`, {
+      method: 'POST',
+      body: formData
+    });
+  }
+
   return await apiRequest(`/tickets/${ticketId}/responses`, {
     method: 'POST',
     body: JSON.stringify({ message, internal_note })
@@ -377,6 +473,17 @@ async function fetchTicketLogs(ticketId) {
   return res?.logs || [];
 }
 
+async function fetchPasswordRecoveryRequests() {
+  const res = await apiRequest('/admin/password-recovery-requests');
+  return res?.requests || [];
+}
+
+async function resolvePasswordRecoveryRequest(requestId) {
+  return await apiRequest(`/admin/password-recovery-requests/${requestId}/resolve`, {
+    method: 'PATCH'
+  });
+}
+
 /* ===========================================================
    ROLE GUARD
 =========================================================== */
@@ -409,3 +516,13 @@ async function apiFetch(path, options = {}) {
 
 // Expose logout to window scope
 window.logout = logout;
+
+// Initialize auto-logout scheduler if a valid token exists on load
+(function initSession() {
+  try {
+    const t = getToken();
+    if (t) scheduleAutoLogout(t);
+  } catch (e) {
+    // ignore
+  }
+})();

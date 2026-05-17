@@ -95,14 +95,18 @@ async function renderTimeline() {
       timestamp: log.created_at,
       title: log.action,
       meta: log.user_name ? `${log.user_name} (${log.user_role})` : 'System',
-      message: log.details || 'System activity recorded.'
+      message: log.details || 'System activity recorded.',
+      attachmentUrl: log.attachment_url || log.attachmentUrl || log.attachment || null,
+      attachmentType: log.attachment_type || log.attachmentType || log.attachment_type || null
     })),
     ...responses.map((response) => ({
       type: response.internal_note ? 'internal' : 'response',
       timestamp: response.created_at,
       title: response.internal_note ? 'Internal Note' : 'Response',
       meta: `${response.author_name || 'Unknown'}${response.author_role ? ` (${response.author_role})` : ''}`,
-      message: response.message || ''
+      message: response.message || '',
+      attachmentUrl: response.attachment_url || response.attachmentUrl || response.attachment || null,
+      attachmentType: response.attachment_type || response.attachmentType || response.attachment_type || null
     }))
   ].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
@@ -120,9 +124,78 @@ async function renderTimeline() {
         <span class="response-meta">${formatDateTime(item.timestamp)}</span>
       </div>
       <div class="response-role">${escapeHtml(item.meta)}</div>
-      <p>${escapeHtml(item.message)}</p>
+      <p class="response-message">${escapeHtml(item.message)}</p>
+
+      ${item.attachmentUrl ? `
+        ${renderAttachment(item.attachmentUrl)}
+      ` : ''}
     </article>
   `).join('');
+}
+
+// Dedicated attachment renderer used by the timeline.
+// Detects extension and returns either an image preview or a download link with label/icon.
+function renderAttachment(fileUrl) {
+  if (!fileUrl) return '';
+  const built = buildAttachmentUrl(fileUrl);
+  const ext = getAttachmentExtension(built);
+  const fullUrl = escapeHtml(built);
+  let fileName = 'attachment';
+  try {
+    const parsed = new URL(built, window.location.href);
+    fileName = decodeURIComponent((parsed.pathname.split('/').pop() || 'attachment'));
+  } catch (e) {
+    fileName = decodeURIComponent((fileUrl.split('/').pop() || 'attachment'));
+  }
+
+  const label = '<p class="attachment-label">This user has sent an attachment, along with the ticket</p>';
+
+  if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(ext)) {
+    return `${label}<div class="timeline-attachment-container"><div class="timeline-attachment-wrap"><img class="timeline-attachment" src="${fullUrl}" alt="${escapeHtml(fileName)}"><p><a class="response-attachment" href="${fullUrl}" target="_blank" rel="noopener">Open attachment</a></p></div></div>`;
+  }
+
+  // PDF / documents — show download link with filename
+  return `${label}<div class="timeline-attachment-container"><div class="timeline-attachment-wrap"><p><a class="attachment-file-link" href="${fullUrl}" target="_blank" rel="noopener">📎 Download attachment: ${escapeHtml(fileName)}</a></p></div></div>`;
+}
+
+function buildAttachmentUrl(url) {
+  if (!url) return '';
+
+  const apiBase = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
+  const cleanedBase = apiBase ? apiBase.replace(/\/api\/?$/i, '') : '';
+
+  try {
+    const parsed = new URL(url, window.location.href);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      if (/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(url) || url.startsWith('//')) {
+        return parsed.href;
+      }
+      if (cleanedBase && parsed.pathname.startsWith('/uploads/')) {
+        return `${cleanedBase}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      return parsed.href;
+    }
+  } catch (e) {
+    // ignore malformed URL
+  }
+
+  if (cleanedBase) {
+    return `${cleanedBase}${url.startsWith('/') ? url : `/${url}`}`;
+  }
+
+  return `${window.location.origin}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
+function getAttachmentExtension(url) {
+  try {
+    const parsed = new URL(url, window.location.href);
+    url = parsed.pathname;
+  } catch (e) {
+    // ignore malformed URL
+  }
+
+  const parts = url.split('.');
+  return parts.length > 1 ? parts.pop().toLowerCase() : '';
 }
 
 async function prepareStatusOptions(currentStatus) {
@@ -166,11 +239,21 @@ async function handleStatusUpdate() {
 async function handleResponseSubmit() {
   const button = document.getElementById('sendResponseBtn');
   const messageNode = document.getElementById('responseMessage');
-  const message = document.getElementById('responseText').value.trim();
+  const messageElem = document.getElementById('responseText');
+  const attachmentInput = document.getElementById('responseAttachment');
+  const attachmentFile = attachmentInput?.files?.[0] || null;
+  const rawValue = messageElem ? messageElem.value : null;
+
+  let message = '';
+  if (messageElem) {
+    message = (messageElem.value || messageElem.textContent || '').trim();
+  }
+  
   const internalOnly = document.getElementById('internalNote').checked;
 
   if (!message) {
-    setMessage(messageNode, 'Response message is required.', 'error');
+    console.warn('[handleResponseSubmit] message empty; element.value:', rawValue, 'textContent:', rawText);
+    setMessage(messageNode, `Response message is required. (read: "${rawValue ?? ''}")`, 'error');
     return;
   }
 
@@ -179,15 +262,16 @@ async function handleResponseSubmit() {
   setMessage(messageNode, '');
 
   try {
-    const result = await submitResponse(currentTicketId, message, internalOnly);
+    const result = await submitResponse(currentTicketId, message, internalOnly, attachmentFile);
 
     if (!result?.success) {
       setMessage(messageNode, result?.message || 'Unable to submit response.', 'error');
       return;
     }
 
-    document.getElementById('responseText').value = '';
+    if (messageElem) messageElem.value = '';
     document.getElementById('internalNote').checked = false;
+    if (attachmentInput) attachmentInput.value = '';
     setMessage(messageNode, result.message || 'Response submitted.', 'success');
     await renderTimeline();
   } finally {

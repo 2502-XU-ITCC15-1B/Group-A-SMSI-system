@@ -104,6 +104,8 @@ CREATE TABLE IF NOT EXISTS ticket_responses (
   user_id BIGINT UNSIGNED NOT NULL,
   message TEXT NOT NULL,
   internal_note TINYINT(1) NOT NULL DEFAULT 0,
+  attachment_url VARCHAR(255) NULL,
+  attachment_type VARCHAR(50) NULL,
   is_deleted TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -170,4 +172,15 @@ CREATE TABLE IF NOT EXISTS password_resets (
   CONSTRAINT fk_resets_user
     FOREIGN KEY (user_id) REFERENCES users(id)
     ON DELETE CASCADE
+);
+
+-- ============================================================
+-- TABLE 9: password_recovery_requests
+-- ============================================================
+CREATE TABLE IF NOT EXISTS password_recovery_requests (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(150) NOT NULL,
+  status ENUM('pending','resolved') NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  resolved_at TIMESTAMP NULL
 );

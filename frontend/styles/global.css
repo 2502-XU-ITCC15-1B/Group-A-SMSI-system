@@ -341,22 +341,29 @@ tbody tr:hover{
   position:fixed;
   inset:0;
   background:rgba(15,23,42,.48);
-  padding:24px;
-  align-items:center;
+  padding:24px 16px;
+  align-items:flex-start;
   justify-content:center;
-  z-index:50
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  z-index:1000;
 }
 
 .modal.open{
-  display:flex
+  display:flex;
 }
 
 .modal-panel{
   width:min(920px,100%);
+  max-height:calc(100vh - 48px);
+  margin:auto;
   background:#fff;
   border-radius:8px;
+  display:flex;
+  flex-direction:column;
   overflow:hidden;
-  box-shadow:var(--shadow-md)
+  box-shadow:var(--shadow-md);
+  z-index:1001;
 }
 
 .modal-head{
@@ -364,13 +371,27 @@ tbody tr:hover{
   border-bottom:1px solid var(--line-soft);
   display:flex;
   justify-content:space-between;
-  align-items:flex-start
+  align-items:flex-start;
 }
 
 .modal-body{
   padding:20px;
-  max-height:calc(100vh - 160px);
-  overflow:auto
+  max-height:calc(100vh - 180px);
+  overflow:auto;
+  min-height:0;
+}
+
+/* Ensure form controls inside modals can render their native dropdowns above other content
+   by avoiding clipping on modal containers and giving selects a higher stacking context. */
+.modal .field{
+  position:relative;
+  overflow:visible;
+}
+.modal .field select,
+.modal .field input,
+.modal .field textarea{
+  position:relative;
+  z-index:1100;
 }
 
 .modal-close{
@@ -398,6 +419,35 @@ tbody tr:hover{
   margin:0;
   font-size:18px;
   line-height:26px
+}
+
+/* Attachment preview styles for timeline cards */
+.timeline-attachment-container{
+  margin-top:12px;
+}
+.attachment-label{
+  margin:0 0 8px 0;
+  color:var(--muted);
+  font-size:13px;
+}
+.timeline-attachment-wrap{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.timeline-attachment{
+  max-width:180px;
+  max-height:120px;
+  object-fit:cover;
+  border-radius:6px;
+  border:1px solid var(--line-soft);
+  box-shadow:var(--shadow-sm);
+}
+.attachment-file-link,
+.response-attachment{
+  color:var(--accent);
+  font-weight:600;
+  text-decoration:underline;
 }
 
 .section-subtitle{
@@ -828,6 +878,32 @@ tbody tr:hover{
   align-items:flex-start;
   justify-content:space-between;
   gap:12px
+}
+
+.timeline-attachment-wrap{
+  margin-top:10px;
+}
+
+.timeline-attachment{
+  display:block;
+  width:100%;
+  max-height:360px;
+  object-fit:contain;
+  border:1px solid var(--line-soft);
+  border-radius:8px;
+}
+
+.attachment-file-link{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  color:var(--primary);
+  text-decoration:none;
+  font-weight:600;
+}
+
+.attachment-file-link:hover{
+  text-decoration:underline;
 }
 
 .form-msg{

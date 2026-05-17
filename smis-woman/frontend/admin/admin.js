@@ -36,6 +36,35 @@ const AdminPortal = (() => {
     }[char]));
   }
 
+  function getAttachmentExtension(url) {
+    try {
+      const parsed = new URL(url, window.location.href);
+      url = parsed.pathname;
+    } catch (e) {
+      // ignore malformed URL
+    }
+    const parts = String(url || '').split('.');
+    return parts.length > 1 ? parts.pop().toLowerCase() : '';
+  }
+
+  function isImageAttachment(url) {
+    const ext = getAttachmentExtension(url);
+    return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(ext);
+  }
+
+  function renderAttachmentHtml(url, attachmentType) {
+    if (!url) return '';
+    const fullUrl = escapeHtml(url);
+    const fileName = decodeURIComponent(String(url).split('/').pop() || 'attachment');
+    const label = '<p class="attachment-label">This response includes a file attachment</p>';
+
+    if (attachmentType === 'image' || (attachmentType == null && isImageAttachment(url))) {
+      return `${label}<div class="timeline-attachment-wrap"><img class="timeline-attachment" src="${fullUrl}" alt="${escapeHtml(fileName)}"><p><a class="response-attachment" href="${fullUrl}" target="_blank" rel="noopener">Open image attachment</a></p></div>`;
+    }
+
+    return `${label}<div class="timeline-attachment-wrap"><p><a class="attachment-file-link" href="${fullUrl}" target="_blank" rel="noopener">📎 Download attachment: ${escapeHtml(fileName)}</a></p></div>`;
+  }
+
   function icon(id, className = 'ui-icon') {
     const symbol = id.startsWith('ic-') ? id : `ic-${id}`;
     return `<svg class="${className}" aria-hidden="true"><use href="#${symbol}"></use></svg>`;
@@ -44,17 +73,7 @@ const AdminPortal = (() => {
   async function loadIconSprite() {
     if (document.getElementById('icon-sprite')) return;
 
-    const candidates = ['/_icons.html', '../_icons.html', './_icons.html', '_icons.html'];
-    let response = null;
-    for (const path of candidates) {
-      try {
-        response = await fetch(path);
-        if (response && response.ok) break;
-      } catch (e) {
-        response = null;
-      }
-    }
-
+    const response = await fetch('/_icons.html').catch(() => fetch('../_icons.html'));
     if (!response || !response.ok) {
       throw new Error('Unable to load icon sprite.');
     }
@@ -425,14 +444,19 @@ const AdminPortal = (() => {
           message: log.details || '',
           created_at: log.created_at
         })),
-        ...responses.map((response) => ({
-          id: response.id,
-          type: response.internal_note ? 'internal' : 'response',
-          title: response.internal_note ? 'Internal Note' : 'Response',
-          actor: response.author_name || 'Unknown User',
-          message: response.message || '',
-          created_at: response.created_at
-        }))
+          ...responses.map((response) => {
+            const rawUrl = response.attachment_url || response.file_path || response.attachment || '';
+            const absUrl = rawUrl ? buildAttachmentUrl(rawUrl) : '';
+            return {
+              type: response.internal_note ? 'internal' : 'response',
+              title: response.internal_note ? 'Internal Note' : 'Response',
+              actor: response.author_name || 'Unknown User',
+              message: response.message || '',
+              attachment_url: absUrl,
+              attachment_type: response.attachment_type || response.attachmentType || null,
+              created_at: response.created_at
+            };
+          })
       ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
       $('adminModalBody').innerHTML = `
@@ -461,6 +485,7 @@ const AdminPortal = (() => {
                 </div>
                 <div class="response-role">${escapeHtml(item.actor)}</div>
                 <p>${escapeHtml(item.message)}</p>
+                ${item.attachment_url ? renderAttachmentHtml(item.attachment_url, item.attachment_type) : ''}
               </article>
             `).join('') : '<div class="empty-state">No activity recorded for this ticket.</div>'}
           </section>
@@ -627,8 +652,8 @@ const AdminPortal = (() => {
           return;
         }
 
-        const result = await apiRequest(`/tickets/${ticketId}/assign-dept`, {
-          method: 'POST',
+        const result = await apiRequest(`/tickets/${ticketId}/assign`, {
+          method: 'PATCH',
           body: JSON.stringify({ department_id: Number(departmentId) })
         });
 
@@ -1031,6 +1056,18 @@ const AdminPortal = (() => {
       });
     };
 
+    function isValidDepartmentName(name) {
+      const normalized = String(name || '').trim();
+      if (!normalized) return false;
+
+      const departmentKeywords = ['department', 'support', 'hr', 'it', 'billing', 'finance', 'accounts', 'operations', 'facilities', 'security', 'compliance', 'customer', 'technical', 'sales', 'procurement', 'logistics', 'service', 'administration', 'staff'];
+      const lowerName = normalized.toLowerCase();
+      if (/^[A-Z]{2,5}$/.test(normalized) && ['HR', 'IT', 'QA', 'UX', 'UI', 'PR'].includes(normalized)) {
+        return true;
+      }
+      return departmentKeywords.some((keyword) => lowerName.includes(keyword));
+    }
+
     function openDepartmentModal(department = null, createMode = true) {
       const isCreate = createMode;
       Modal.open({
@@ -1069,6 +1106,17 @@ const AdminPortal = (() => {
           manager_id: $('departmentManager').value ? Number($('departmentManager').value) : null,
           is_active: Number($('departmentStatus').value)
         };
+
+        if (!payload.name) {
+          setInlineMessage($('departmentModalMessage'), 'Department name is required.', 'error');
+          return;
+        }
+
+        if (!isValidDepartmentName(payload.name)) {
+          setInlineMessage($('departmentModalMessage'), 'Department name must be a real department, such as IT Support, HR, Billing, or Technical Support.', 'error');
+          return;
+        }
+
         const result = isCreate ? await createDepartment(payload) : await updateDepartment(department.id, payload);
         if (result?.success || result?.department?.id) {
           Modal.close();
@@ -1301,8 +1349,8 @@ async function assignTicketToDept(ticketId) {
         return;
     }
 
-    const result = await apiRequest(`/tickets/${ticketId}/assign-dept`, {
-        method: 'POST',
+    const result = await apiRequest(`/tickets/${ticketId}/assign`, {
+        method: 'PATCH',
         body: JSON.stringify({
             department_id: Number(selectedDeptId)
         })

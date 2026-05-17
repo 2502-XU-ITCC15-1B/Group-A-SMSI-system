@@ -16,6 +16,7 @@ const AdminPortal = (() => {
     page: null,
     tickets: [],
     users: [],
+    clients: [],
     companies: [],
     departments: [],
     technicians: [],
@@ -39,6 +40,72 @@ const AdminPortal = (() => {
   function icon(id, className = 'ui-icon') {
     const symbol = id.startsWith('ic-') ? id : `ic-${id}`;
     return `<svg class="${className}" aria-hidden="true"><use href="#${symbol}"></use></svg>`;
+  }
+
+  function buildAttachmentUrl(url) {
+    if (!url) return '';
+    const apiBase = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
+    const cleanedBase = apiBase ? apiBase.replace(/\/api\/?$/i, '') : '';
+
+    try {
+      const parsed = new URL(url, window.location.href);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        if (/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(url) || url.startsWith('//')) {
+          return parsed.href;
+        }
+        if (cleanedBase && parsed.pathname.startsWith('/uploads/')) {
+          return `${cleanedBase}${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
+        return parsed.href;
+      }
+    } catch (e) {
+      // malformed URL, fall back to building from api base
+    }
+
+    if (cleanedBase) {
+      return `${cleanedBase}${url.startsWith('/') ? url : `/${url}`}`;
+    }
+    return `${window.location.origin}${url.startsWith('/') ? url : `/${url}`}`;
+  }
+
+  function getAttachmentExtension(url) {
+    try {
+      const parsed = new URL(url, window.location.href);
+      url = parsed.pathname;
+    } catch (e) {
+      // ignore malformed URL
+    }
+    const parts = String(url || '').split('.');
+    return parts.length > 1 ? parts.pop().toLowerCase() : '';
+  }
+
+  function isImageAttachment(url) {
+    const ext = getAttachmentExtension(url);
+    return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(ext);
+  }
+
+  function renderAttachmentHtml(url, attachmentType) {
+    if (!url) return '';
+    const fullUrl = escapeHtml(buildAttachmentUrl(url));
+    const fileName = decodeURIComponent(String(url).split('/').pop() || 'attachment');
+    const label = '<p class="attachment-label">This response includes a file attachment</p>';
+
+    if (attachmentType === 'image' || (attachmentType == null && isImageAttachment(url))) {
+      return `${label}<div class="timeline-attachment-wrap"><img class="timeline-attachment" src="${fullUrl}" alt="${escapeHtml(fileName)}"><p><a class="response-attachment" href="${fullUrl}" target="_blank" rel="noopener">Open image attachment</a></p></div>`;
+    }
+
+    return `${label}<div class="timeline-attachment-wrap"><p><a class="attachment-file-link" href="${fullUrl}" target="_blank" rel="noopener">📎 Download attachment: ${escapeHtml(fileName)}</a></p></div>`;
+  }
+
+  function parseAttachmentFromLog(log) {
+    const details = String(log.details || '');
+    const urlMatch = /attachment_url=([^;\n]+)/i.exec(details);
+    const typeMatch = /attachment_type=([^;\n]+)/i.exec(details);
+
+    return {
+      attachment_url: urlMatch ? urlMatch[1].trim() : '',
+      attachment_type: typeMatch ? typeMatch[1].trim() : null
+    };
   }
 
   async function loadIconSprite() {
@@ -298,6 +365,23 @@ const AdminPortal = (() => {
         <article class="card metric-card"><span class="metric-label">Resolved / Closed</span><strong class="metric-value" id="dashboardResolvedTickets">--</strong></article>
       </section>
 
+      <section class="card stack" id="recoveryRequestsSection" style="display:none;">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">Pending Password Recovery Requests</h2>
+            <p class="section-subtitle">Users requesting manual password reset assistance.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Email</th><th>Requested</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="dashboardRecoveryRequests"></tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="admin-two-column">
         <section class="card stack">
           <div class="section-head">
@@ -327,16 +411,49 @@ const AdminPortal = (() => {
       </section>
     `);
 
-    const [dashboard, tickets, logs] = await Promise.all([
+    const [dashboard, tickets, logs, recoveryRequests] = await Promise.all([
       apiRequest('/admin/dashboard'),
       fetchTickets(),
-      fetchLogs({ limit: 8 })
+      fetchLogs({ limit: 8 }),
+      fetchPasswordRecoveryRequests().catch(() => [])
     ]);
 
     $('dashboardTotalTickets').textContent = dashboard?.totalTickets ?? tickets.length;
     $('dashboardOpenTickets').textContent = dashboard?.openTickets ?? tickets.filter((ticket) => ticket.status === 'Open').length;
     $('dashboardProgressTickets').textContent = dashboard?.inProgressTickets ?? tickets.filter((ticket) => ['Assigned', 'In Progress'].includes(ticket.status)).length;
     $('dashboardResolvedTickets').textContent = dashboard?.resolvedTickets ?? tickets.filter((ticket) => ['Resolved', 'Closed'].includes(ticket.status)).length;
+
+    // Display pending recovery requests if any
+    const recoverySection = $('recoveryRequestsSection');
+    const recoveryBody = $('dashboardRecoveryRequests');
+    if (recoveryRequests && recoveryRequests.length > 0) {
+      recoverySection.style.display = 'block';
+      recoveryBody.innerHTML = recoveryRequests.map((req) => `
+        <tr>
+          <td>${escapeHtml(req.email || '-')}</td>
+          <td>${formatDateTimeLocal(req.created_at)}</td>
+          <td>
+            <button class="icon-button" data-resolve-recovery="${req.id}" title="Mark Resolved">${icon('check')}</button>
+          </td>
+        </tr>
+      `).join('');
+
+      recoveryBody.querySelectorAll('[data-resolve-recovery]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const reqId = button.dataset.resolveRecovery;
+          const result = await resolvePasswordRecoveryRequest(reqId);
+          if (result?.success) {
+            notify('Recovery request resolved.');
+            // Reload dashboard to refresh list
+            initDashboard();
+          } else {
+            notify(result?.message || 'Unable to resolve request.', 'error');
+          }
+        });
+      });
+    } else {
+      recoverySection.style.display = 'none';
+    }
 
     const recentBody = $('dashboardRecentTickets');
     const recentTickets = tickets.slice(0, 6);
@@ -361,16 +478,20 @@ const AdminPortal = (() => {
 
     const activityNode = $('dashboardActivity');
     activityNode.innerHTML = logs.length
-      ? logs.map((log) => `
-          <article class="timeline-item timeline-item-log">
-            <div class="timeline-item-header">
-              <strong>${escapeHtml(log.action || 'Activity')}</strong>
-              <span class="response-meta">${formatRelative(log.created_at)}</span>
-            </div>
-            <div class="response-role">${escapeHtml(log.user_name || 'System')} ${log.work_order_id ? `- ${escapeHtml(log.work_order_id)}` : ''}</div>
-            <p>${escapeHtml(log.details || '')}</p>
-          </article>
-        `).join('')
+      ? logs.map((log) => {
+          const attachment = parseAttachmentFromLog(log);
+          return `
+            <article class="timeline-item timeline-item-log">
+              <div class="timeline-item-header">
+                <strong>${escapeHtml(log.action || 'Activity')}</strong>
+                <span class="response-meta">${formatRelative(log.created_at)}</span>
+              </div>
+              <div class="response-role">${escapeHtml(log.user_name || 'System')} ${log.work_order_id ? `- ${escapeHtml(log.work_order_id)}` : ''}</div>
+              <p>${escapeHtml(log.details || '')}</p>
+              ${attachment.attachment_url ? renderAttachmentHtml(attachment.attachment_url, attachment.attachment_type) : ''}
+            </article>
+          `;
+        }).join('')
       : '<div class="empty-state">No recent activity.</div>';
   }
 
@@ -404,14 +525,20 @@ const AdminPortal = (() => {
           message: log.details || '',
           created_at: log.created_at
         })),
-        ...responses.map((response) => ({
-          id: response.id,
-          type: response.internal_note ? 'internal' : 'response',
-          title: response.internal_note ? 'Internal Note' : 'Response',
-          actor: response.author_name || 'Unknown User',
-          message: response.message || '',
-          created_at: response.created_at
-        }))
+        ...responses.map((response) => {
+          const rawUrl = response.attachment_url || response.file_path || response.attachment || '';
+          const absUrl = rawUrl ? buildAttachmentUrl(rawUrl) : '';
+          return {
+            id: response.id,
+            type: response.internal_note ? 'internal' : 'response',
+            title: response.internal_note ? 'Internal Note' : 'Response',
+            actor: response.author_name || 'Unknown User',
+            message: response.message || '',
+            attachment_url: absUrl,
+            attachment_type: response.attachment_type || response.attachmentType || null,
+            created_at: response.created_at
+          };
+        })
       ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
       $('adminModalBody').innerHTML = `
@@ -440,6 +567,7 @@ const AdminPortal = (() => {
                 </div>
                 <div class="response-role">${escapeHtml(item.actor)}</div>
                 <p>${escapeHtml(item.message)}</p>
+                ${item.attachment_url ? renderAttachmentHtml(item.attachment_url, item.attachment_type) : ''}
               </article>
             `).join('') : '<div class="empty-state">No activity recorded for this ticket.</div>'}
           </section>
@@ -461,6 +589,7 @@ const AdminPortal = (() => {
           <select id="ticketStatusFilter"><option value="">All Statuses</option><option>Open</option><option>Assigned</option><option>In Progress</option><option>Resolved</option><option>Closed</option></select>
           <select id="ticketPriorityFilter"><option value="">All Priorities</option><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select>
           <select id="ticketCompanyFilter"><option value="">All Companies</option></select>
+          <button class="btn" id="addTicketBtn" type="button">${icon('plus')}New Ticket</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -477,19 +606,22 @@ const AdminPortal = (() => {
       </section>
     `);
 
-    const [tickets, companies, technicians, departments] = await Promise.all([
+    const [tickets, companies, technicians, departments, clients] = await Promise.all([
       fetchTickets(),
       fetchCompanies(),
       fetchTechnicians(),
-      fetchDepartments()
+      fetchDepartments(),
+      fetchUsers({ role: 'client' })
     ]);
 
     state.tickets = tickets;
     state.companies = companies;
     state.technicians = technicians;
     state.departments = departments;
+    state.clients = clients;
 
     $('ticketCompanyFilter').innerHTML += companies.map((company) => `<option value="${company.id}">${escapeHtml(company.name)}</option>`).join('');
+    $('addTicketBtn').addEventListener('click', openCreateTicketModal);
 
     const filterState = { search: '', status: '', priority: '', companyId: '', page: 1 };
 
@@ -616,6 +748,142 @@ const AdminPortal = (() => {
           render();
         } else {
           setInlineMessage($('assignTicketMessage'), result?.message || 'Unable to forward ticket.', 'error');
+        }
+      });
+    }
+
+    function openCreateTicketModal() {
+      // Build fresh options to ensure the latest state is included
+      const clientOptions = [`<option value="">Select client</option>`, ...state.clients.map((client) => `<option value="${client.id}" data-company-id="${client.company_id || ''}">${escapeHtml(client.name)} (${escapeHtml(client.email)})</option>`)];
+      const companyOptions = [`<option value="">Select company</option>`, ...state.companies.map((company) => `<option value="${company.id}">${escapeHtml(company.name)}</option>`)];
+      const departmentOptions = [`<option value="">Select department</option>`, ...state.departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`)];
+
+      const formMarkup = `
+        <form id="createTicketForm" class="stack">
+          <div class="field">
+            <label for="ticketRequestor">Client</label>
+            <select id="ticketRequestor" required aria-label="Client">
+              ${clientOptions.join('')}
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="ticketCompany">Company</label>
+            <select id="ticketCompany" aria-label="Company">
+              ${companyOptions.join('')}
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="ticketDepartment">Department</label>
+            <select id="ticketDepartment" aria-label="Department">
+              ${departmentOptions.join('')}
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="ticketTitle">Title</label>
+            <input id="ticketTitle" type="text" required aria-label="Title">
+          </div>
+
+          <div class="field">
+            <label for="ticketPriority">Priority</label>
+            <select id="ticketPriority" aria-label="Priority">
+              <option>Low</option>
+              <option selected>Medium</option>
+              <option>High</option>
+              <option>Critical</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="ticketDescription">Description</label>
+            <textarea id="ticketDescription" rows="5" required aria-label="Description"></textarea>
+          </div>
+
+          <p id="createTicketMessage" class="form-msg"></p>
+
+          <div class="form-actions">
+            <button class="btn secondary" data-modal-close type="button">Cancel</button>
+            <button class="btn" id="createTicketSubmit" type="submit">Submit Ticket</button>
+          </div>
+        </form>
+      `;
+
+      Modal.open({
+        title: 'Create Ticket',
+        subtitle: 'Create a new request on behalf of a client.',
+        body: formMarkup
+      });
+
+      // Bind UI interactions after insertion
+      document.querySelector('[data-modal-close]')?.addEventListener('click', () => Modal.close());
+
+      const _requestorSelect = $('ticketRequestor');
+      const _companySelect = $('ticketCompany');
+      const _departmentSelect = $('ticketDepartment');
+
+      // Auto-select company when a client is chosen (Major 1)
+      if (_requestorSelect && _companySelect) {
+        _requestorSelect.addEventListener('change', () => {
+          const selectedOpt = _requestorSelect.options[_requestorSelect.selectedIndex];
+          const linkedCompany = selectedOpt?.dataset?.companyId || '';
+          if (linkedCompany) {
+            _companySelect.value = String(linkedCompany);
+          } else {
+            _companySelect.value = '';
+          }
+        });
+      }
+
+      // Ensure Department select stays available for Admin routing (Major 2)
+      // (No filtering applied here; departments are global in the system.)
+
+      // Form submit
+      const formNode = $('createTicketForm');
+      formNode.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const requestorId = $('ticketRequestor').value;
+        const companyId = $('ticketCompany').value;
+        const departmentId = $('ticketDepartment').value;
+        const title = $('ticketTitle').value.trim();
+        const priority = $('ticketPriority').value;
+        const description = $('ticketDescription').value.trim();
+
+        if (!requestorId || !title || !description || !priority) {
+          setInlineMessage($('createTicketMessage'), 'Client, title, priority, and description are required.', 'error');
+          return;
+        }
+
+        const submitBtn = $('createTicketSubmit');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+
+        const payload = {
+          title,
+          priority,
+          description,
+          requestor_id: Number(requestorId),
+          company_id: companyId ? Number(companyId) : null,
+          department_id: departmentId ? Number(departmentId) : null
+        };
+
+        try {
+          const result = await createTicket(payload);
+          if (result?.success) {
+            Modal.close();
+            notify(result.message || 'Ticket created successfully.');
+            state.tickets = await fetchTickets();
+            render();
+          } else {
+            setInlineMessage($('createTicketMessage'), result?.message || 'Unable to create ticket.', 'error');
+          }
+        } catch (error) {
+          console.error(error);
+          setInlineMessage($('createTicketMessage'), 'Unable to create ticket.', 'error');
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Submit Ticket';
         }
       });
     }
@@ -919,10 +1187,46 @@ const AdminPortal = (() => {
       });
 
       $('companyCancelBtn').addEventListener('click', () => Modal.close());
+      const isPersonalCompanyName = (value) => {
+        const normalized = String(value || '').trim();
+        if (!normalized) return false;
+
+        const words = normalized.split(/\s+/);
+        if (words.length < 2 || words.length > 3) return false;
+        if (!words.every((word) => /^[A-Z][a-z]+$/.test(word))) return false;
+
+        const lower = normalized.toLowerCase();
+        const corporateTerms = [
+          'company', 'inc', 'incorporated', 'corp', 'corporation', 'ltd', 'llc', 'group',
+          'solutions', 'systems', 'services', 'technologies', 'tech', 'enterprise',
+          'partners', 'studios', 'industries', 'holdings', 'international', 'global',
+          'co', 'consulting', 'associates', 'ventures', 'works'
+        ];
+        return !corporateTerms.some((term) => lower.includes(term));
+      };
+
       $('companyForm').addEventListener('submit', async (event) => {
         event.preventDefault();
+        const name = $('companyName').value.trim();
+        if (!name) {
+          setInlineMessage($('companyModalMessage'), 'Company name is required.', 'error');
+          return;
+        }
+
+        if (isPersonalCompanyName(name)) {
+          setInlineMessage($('companyModalMessage'), 'Company name appears to be a personal name. Please enter an actual corporate name.', 'error');
+          return;
+        }
+
+        const normalized = name.toLowerCase();
+        const matchingUser = state.users.find((u) => String(u.name || '').toLowerCase() === normalized);
+        if (matchingUser) {
+          setInlineMessage($('companyModalMessage'), 'Company name cannot match an existing user name. Please use a corporate name.', 'error');
+          return;
+        }
+
         const payload = {
-          name: $('companyName').value.trim(),
+          name,
           contact_person: $('companyContact').value.trim(),
           contact_email: $('companyEmail').value.trim(),
           is_active: Number($('companyStatus').value)
@@ -1008,6 +1312,18 @@ const AdminPortal = (() => {
       });
     };
 
+    function isValidDepartmentName(name) {
+      const normalized = String(name || '').trim();
+      if (!normalized) return false;
+
+      const departmentKeywords = ['department', 'support', 'hr', 'it', 'billing', 'finance', 'accounts', 'operations', 'facilities', 'security', 'compliance', 'customer', 'technical', 'sales', 'procurement', 'logistics', 'service', 'administration', 'staff'];
+      const lowerName = normalized.toLowerCase();
+      if (/^[A-Z]{2,5}$/.test(normalized) && ['HR', 'IT', 'QA', 'UX', 'UI', 'PR'].includes(normalized)) {
+        return true;
+      }
+      return departmentKeywords.some((keyword) => lowerName.includes(keyword));
+    }
+
     function openDepartmentModal(department = null, createMode = true) {
       const isCreate = createMode;
       Modal.open({
@@ -1046,6 +1362,17 @@ const AdminPortal = (() => {
           manager_id: $('departmentManager').value ? Number($('departmentManager').value) : null,
           is_active: Number($('departmentStatus').value)
         };
+
+        if (!payload.name) {
+          setInlineMessage($('departmentModalMessage'), 'Department name is required.', 'error');
+          return;
+        }
+
+        if (!isValidDepartmentName(payload.name)) {
+          setInlineMessage($('departmentModalMessage'), 'Department name must be a real department, such as IT Support, HR, Billing, or Technical Support.', 'error');
+          return;
+        }
+
         const result = isCreate ? await createDepartment(payload) : await updateDepartment(department.id, payload);
         if (result?.success || result?.department?.id) {
           Modal.close();
@@ -1145,17 +1472,20 @@ const AdminPortal = (() => {
         return (!search || text.includes(search)) && (!actionFilter || log.action === actionFilter);
       });
 
-      $('adminActivityList').innerHTML = filtered.length ? filtered.map((log) => `
-        <article class="timeline-item timeline-item-log" data-log-id="${log.id}">
-          <div class="timeline-item-header">
-            <strong>${escapeHtml(log.action || 'Activity')}</strong>
-            <span class="response-meta">${formatDateTimeLocal(log.created_at)}</span>
-          </div>
-          <div class="response-role">${escapeHtml(log.user_name || 'System')} ${log.work_order_id ? `- ${escapeHtml(log.work_order_id)}` : ''}</div>
-          <p>${escapeHtml(log.details || '')}</p>
-            ${log.action === 'RESPONSE_ADDED' && (getUser() || {}).role === 'admin' ? '' : ''}
-        </article>
-      `).join('') : '<div class="empty-state">No activity matched the current filters.</div>';
+      $('adminActivityList').innerHTML = filtered.length ? filtered.map((log) => {
+        const attachment = parseAttachmentFromLog(log);
+        return `
+          <article class="timeline-item timeline-item-log" data-log-id="${log.id}">
+            <div class="timeline-item-header">
+              <strong>${escapeHtml(log.action || 'Activity')}</strong>
+              <span class="response-meta">${formatDateTimeLocal(log.created_at)}</span>
+            </div>
+            <div class="response-role">${escapeHtml(log.user_name || 'System')} ${log.work_order_id ? `- ${escapeHtml(log.work_order_id)}` : ''}</div>
+            <p>${escapeHtml(log.details || '')}</p>
+            ${attachment.attachment_url ? renderAttachmentHtml(attachment.attachment_url, attachment.attachment_type) : ''}
+          </article>
+        `;
+      }).join('') : '<div class="empty-state">No activity matched the current filters.</div>';
 
     };
 

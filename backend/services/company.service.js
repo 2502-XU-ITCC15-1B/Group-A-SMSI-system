@@ -1,6 +1,51 @@
 const pool = require('../config/db');
 const logService = require('./log.service');
 
+const CORPORATE_KEYWORDS = [
+  'company', 'inc', 'incorporated', 'corp', 'corporation', 'ltd', 'llc', 'group',
+  'solutions', 'systems', 'services', 'technologies', 'tech', 'enterprise',
+  'partners', 'studios', 'industries', 'holdings', 'international', 'global',
+  'co', 'consulting', 'associates', 'ventures', 'works'
+];
+
+function normalizeName(value) {
+  return String(value || '').trim();
+}
+
+function looksLikePersonName(name) {
+  const normalized = normalizeName(name);
+  if (!normalized) return false;
+
+  const words = normalized.split(/\s+/);
+  if (words.length < 2 || words.length > 3) return false;
+  if (!words.every((word) => /^[A-Z][a-z]+$/.test(word))) return false;
+
+  const lower = normalized.toLowerCase();
+  return !CORPORATE_KEYWORDS.some((term) => lower.includes(term));
+}
+
+async function validateCompanyName(name) {
+  const normalized = normalizeName(name);
+  if (!normalized) {
+    throw { status: 400, message: 'Company name is required.' };
+  }
+
+  const nameLower = normalized.toLowerCase();
+  const [userRows] = await pool.query(
+    'SELECT id FROM users WHERE LOWER(name) = ? LIMIT 1',
+    [nameLower]
+  );
+  if (userRows.length) {
+    throw { status: 400, message: 'Company name conflicts with an existing user name.' };
+  }
+
+  if (looksLikePersonName(normalized)) {
+    throw { status: 400, message: 'Company name appears to be a personal name. Please use an actual corporate name.' };
+  }
+
+  return normalized;
+}
+
 // -------------------------------------------------------
 // Business logic for managing client companies (admin-only).
 // -------------------------------------------------------
@@ -33,10 +78,11 @@ const getById = async (id) => {
 };
 
 const create = async ({ name, contact_person, contact_email, is_active = 1 }, adminId = null) => {
+  const normalizedName = await validateCompanyName(name);
   const [result] = await pool.query(
     `INSERT INTO companies (name, contact_person, contact_email, is_active)
      VALUES (?, ?, ?, ?)`,
-    [name, contact_person || null, contact_email || null, is_active ? 1 : 0]
+    [normalizedName, contact_person || null, contact_email || null, is_active ? 1 : 0]
   );
 
   if (adminId) {
@@ -51,6 +97,10 @@ const create = async ({ name, contact_person, contact_email, is_active = 1 }, ad
 };
 
 const update = async (id, data, adminId = null) => {
+  if (Object.prototype.hasOwnProperty.call(data, 'name')) {
+    data.name = await validateCompanyName(data.name);
+  }
+
   const [result] = await pool.query(
     `UPDATE companies
      SET name = COALESCE(?, name),

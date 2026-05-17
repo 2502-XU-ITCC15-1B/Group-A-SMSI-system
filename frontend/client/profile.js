@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
   await ClientPortal.hydrateClientSession();
-  if (!requireRole('client')) return;
+  if (!(await requireRole('client'))) return;
   ClientPortal.initPage({
     activeNav: 'profile',
     title: 'Profile',

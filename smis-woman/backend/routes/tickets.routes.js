@@ -18,12 +18,16 @@ const attachmentUpload = multer({
   storage: attachmentStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|pdf/;
-    const extAllowed = allowed.test(path.extname(file.originalname).toLowerCase());
-    const typeAllowed = allowed.test(file.mimetype);
-    cb(extAllowed && typeAllowed ? null : new Error('Only JPG, PNG, GIF, and PDF files are allowed.'));
+    const extAllowed = /\.(jpe?g|png|gif|pdf|doc|docx|txt|xls|xlsx|bmp|webp|svg)$/i.test(path.extname(file.originalname));
+    const typeAllowed = /(image\/.*|application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|text\/plain)/i.test(file.mimetype);
+    cb(extAllowed && typeAllowed ? null : new Error('Only JPG, PNG, GIF, PDF, DOC, DOCX, XLS, XLSX, TXT, BMP, WEBP, and SVG files are allowed.'));
   }
 });
+
+const getAttachmentType = (originalName) => {
+  const ext = path.extname(originalName || '').toLowerCase();
+  return ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'].includes(ext) ? 'image' : 'document';
+};
 
 // GET    /api/tickets
 // → admin: all | technician: assigned | client: own company
@@ -73,7 +77,30 @@ router.get('/:id', authenticate, async (req, res) => {
 router.get('/:id/responses', authenticate, async (req, res) => {
   try {
     const responses = await ticketService.getResponses(req.params.id, req.user);
-    res.json({ success: true, responses });
+    const normalized = (responses || []).map((r) => {
+      const orig = r || {};
+      let attachmentUrl = orig.attachment_url || orig.attachment || orig.file_path || null;
+      if (attachmentUrl) {
+        if (!/^https?:\/\//i.test(attachmentUrl)) {
+          const base = `${req.protocol}://${req.get('host')}`;
+          attachmentUrl = attachmentUrl.startsWith('/') ? `${base}${attachmentUrl}` : `${base}/${attachmentUrl}`;
+        }
+      }
+      return {
+        ...orig,
+        attachment_url: attachmentUrl,
+        attachment_type: orig.attachment_type || null
+      };
+    });
+
+    try {
+      const attachmentsCount = normalized.filter(r => r && (r.attachment_url || r.attachment_type)).length;
+      console.log(`[SMIS RESPONSES DEBUG] ticket=${req.params.id} user=${req.user.id} role=${req.user.role} responses=${normalized.length} attachments=${attachmentsCount}`);
+    } catch (e) {
+      console.log('[SMIS RESPONSES DEBUG] failed to inspect responses:', e && e.message);
+    }
+
+    res.json({ success: true, responses: normalized });
   } catch (err) {
     res.status(err.status || 500).json({
       success: false,
@@ -84,15 +111,33 @@ router.get('/:id/responses', authenticate, async (req, res) => {
 
 // POST   /api/tickets
 // Roles: admin, client
-// Body: { title, description, priority, company_id? }
+// Body: { title, description, priority, requestor_id?, client_id?, company_id?, department_id? }
+// Multipart/form-data: add `attachment` file for ticket creation
 // → create ticket
-router.post('/', authenticate, authorize('admin', 'client'), async (req, res) => {
+router.post('/', authenticate, authorize('admin', 'client'), attachmentUpload.single('attachment'), async (req, res) => {
   try {
     const body = req.user.role === 'client'
       ? { ...req.body, company_id: req.user.company_id, requestor_id: req.user.id }
-      : { ...req.body, requestor_id: req.user.id };
+      : {
+          ...req.body,
+          requestor_id: req.body.requestor_id || req.body.client_id || req.user.id,
+          company_id: req.body.company_id ?? null,
+          department_id: req.body.department_id ?? null
+        };
 
     const ticket = await ticketService.create(body, req.user);
+
+    if (req.file) {
+      const attachmentType = getAttachmentType(req.file.originalname);
+      const attachmentUrl = `/uploads/ticket_responses/${req.file.filename}`;
+      await ticketService.addResponse(ticket.id, {
+        message: 'Attachment added at ticket creation.',
+        internal_note: false,
+        attachment_url: attachmentUrl,
+        attachment_type: attachmentType
+      }, req.user);
+    }
+
     res.status(201).json({ success: true, ticket });
   } catch (err) {
     res.status(err.status || 500).json({
@@ -142,8 +187,8 @@ router.patch('/:id/status', authenticate, authorize('admin', 'head', 'technician
 
 // PATCH  /api/tickets/:id/assign
 // Roles: admin, head
-// → assign technician to ticket
-router.patch('/:id/assign', authenticate, authorize('admin', 'head'), async (req, res) => {
+// → assign technician or department to ticket
+const handleAssignRequest = async (req, res) => {
   try {
     const result = await ticketService.assign(
       req.params.id,
@@ -158,7 +203,10 @@ router.patch('/:id/assign', authenticate, authorize('admin', 'head'), async (req
       message: err.message
     });
   }
-});
+};
+
+router.patch('/:id/assign', authenticate, authorize('admin', 'head'), handleAssignRequest);
+router.patch('/:id/assign-dept', authenticate, authorize('admin', 'head'), handleAssignRequest);
 
 // PATCH  /api/tickets/:id/close
 // Roles: admin, head
@@ -188,10 +236,22 @@ router.post('/:id/responses', authenticate, authorize('admin', 'head', 'technici
     const payload = {
       message: req.body.message,
       internal_note: internalNote,
-      attachment_url: req.file ? `/uploads/ticket_responses/${req.file.filename}` : null
+      attachment_url: req.file ? `/uploads/ticket_responses/${req.file.filename}` : null,
+      attachment_type: req.file ? getAttachmentType(req.file.originalname) : null
     };
 
     const result = await ticketService.addResponse(req.params.id, payload, req.user);
+
+    if (result && result.response) {
+      const r = result.response;
+      let attachmentUrl = r.attachment_url || r.attachment || r.file_path || null;
+      if (attachmentUrl && !/^https?:\/\//i.test(attachmentUrl)) {
+        const base = `${req.protocol}://${req.get('host')}`;
+        attachmentUrl = attachmentUrl.startsWith('/') ? `${base}${attachmentUrl}` : `${base}/${attachmentUrl}`;
+      }
+      result.response.attachment_url = attachmentUrl;
+      result.response.attachment_type = r.attachment_type || (attachmentUrl ? getAttachmentType(attachmentUrl) : null);
+    }
 
     res.status(201).json({ success: true, ...result });
   } catch (err) {
@@ -199,18 +259,6 @@ router.post('/:id/responses', authenticate, authorize('admin', 'head', 'technici
       success: false,
       message: err.message
     });
-  }
-});
-
-// DELETE /api/tickets/:id/responses/:responseId
-// Roles: admin
-router.delete('/:id/responses/:responseId', authenticate, authorize('admin'), async (req, res) => {
-  try {
-    const { id, responseId } = req.params;
-    const result = await ticketService.removeResponse(id, responseId, req.user);
-    res.json(result);
-  } catch (err) {
-    res.status(err.status || 500).json({ success: false, message: err.message });
   }
 });
 

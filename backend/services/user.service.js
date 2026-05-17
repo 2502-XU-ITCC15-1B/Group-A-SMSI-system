@@ -147,6 +147,8 @@ const update = async (id, data, adminId) => {
     }
   });
 
+  const hasPassword = Object.prototype.hasOwnProperty.call(data, 'password');
+
   if (!fields.length) {
     return { success: true, message: 'No user changes submitted.' };
   }
@@ -167,6 +169,11 @@ const update = async (id, data, adminId) => {
     action: 'USER_UPDATED',
     details: `User ID ${id} updated.`
   });
+
+  // If password was provided in payload, perform the reset after the update
+  if (hasPassword) {
+    await resetPassword(id, String(data.password), adminId);
+  }
 
   return { success: true, message: 'User updated.' };
 };

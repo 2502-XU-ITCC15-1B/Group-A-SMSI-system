@@ -101,7 +101,7 @@ const getById = async (id, user) => {
     throw { status: 403, message: 'Access denied.' };
   }
 
-  if (user.role === 'head' && user.department_id && ticket.department_id !== user.department_id) {
+  if (user.role === 'head' && user.department_id && ticket.department_id !== user.department_id && ticket.department_id !== null) {
     throw { status: 403, message: 'Access denied.' };
   }
 
@@ -113,6 +113,21 @@ const getById = async (id, user) => {
 // -------------------------------------------------------
 const create = async (data, user) => {
   const work_order_id = await generateWorkOrderId();
+
+  // Validate referenced company and department IDs if provided
+  if (data.company_id) {
+    const [compRows] = await pool.query('SELECT id FROM companies WHERE id = ?', [data.company_id]);
+    if (!compRows.length) {
+      throw { status: 400, message: 'Invalid company_id provided.' };
+    }
+  }
+
+  if (data.department_id) {
+    const [deptRows] = await pool.query('SELECT id FROM departments WHERE id = ?', [data.department_id]);
+    if (!deptRows.length) {
+      throw { status: 400, message: 'Invalid department_id provided.' };
+    }
+  }
 
   const [result] = await pool.query(
     `INSERT INTO tickets
@@ -363,39 +378,66 @@ const addResponse = async (ticketId, data, user) => {
 
   await getById(ticketId, user);
 
-  await pool.query(
-    `INSERT INTO ticket_responses (ticket_id, user_id, message, internal_note)
-     VALUES (?, ?, ?, ?)`,
-    [ticketId, user.id, message, data.internal_note ? 1 : 0]
+  const [insertResult] = await pool.query(
+    `INSERT INTO ticket_responses (ticket_id, user_id, message, internal_note, attachment_url, attachment_type)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [ticketId, user.id, message, data.internal_note ? 1 : 0, data.attachment_url || null, data.attachment_type || null]
   );
 
-  const [res] = await pool.query('SELECT LAST_INSERT_ID() as id');
-  const responseId = res && res[0] ? res[0].id : null;
+  const responseId = insertResult.insertId;
+  const [rows] = await pool.query(
+    `SELECT r.id, r.ticket_id, r.user_id, r.message, r.internal_note, r.attachment_url, r.attachment_type, r.created_at,
+            u.name AS author_name, u.role AS author_role
+     FROM ticket_responses r
+     JOIN users u ON u.id = r.user_id
+     WHERE r.id = ?`,
+    [responseId]
+  );
 
   await logService.record({
     ticketId,
     userId: user.id,
     action: 'RESPONSE_ADDED',
-    details: `Response added; response_id=${responseId}`
+    details: `Response added; response_id=${responseId}${data.attachment_url ? `; attachment_url=${data.attachment_url}` : ''}${data.attachment_type ? `; attachment_type=${data.attachment_type}` : ''}`
   });
 
-  return { message: 'Response submitted.' };
+  return {
+    message: 'Response submitted.',
+    response: rows[0] || null
+  };
 };
 
 // ── getResponses ───────────────────────────────────────
 // Retrieves all responses for a ticket
 // -------------------------------------------------------
 const getResponses = async (ticketId, user) => {
-  await getById(ticketId, user);
+  // Fetch ticket to perform role-aware access control for responses
+  const [ticketRows] = await pool.query('SELECT id, company_id, department_id, technician_id FROM tickets WHERE id = ? AND is_deleted = 0', [ticketId]);
+  if (ticketRows.length === 0) {
+    throw { status: 404, message: 'Ticket not found.' };
+  }
 
-      const [rows] = await pool.query(
-        `SELECT r.*, u.name AS author_name, u.role AS author_role
-         FROM ticket_responses r
-         JOIN users u ON u.id = r.user_id
-         WHERE r.ticket_id = ? AND r.is_deleted = 0
-         ORDER BY r.created_at ASC`,
-        [ticketId]
-      );
+  const ticket = ticketRows[0];
+
+  // Simple rule: admins, technicians, and department heads can view responses/attachments
+  if (['admin', 'technician', 'head'].includes(user.role)) {
+    // allowed
+  } else if (user.role === 'client') {
+    if (ticket.company_id !== user.company_id) throw { status: 403, message: 'Access denied.' };
+  } else {
+    throw { status: 403, message: 'Access denied.' };
+  }
+
+  const [rows] = await pool.query(
+    `SELECT r.id, r.ticket_id, r.user_id, r.message, r.internal_note, r.created_at, r.is_deleted,
+            r.attachment_url, r.attachment_type,
+            u.name AS author_name, u.role AS author_role
+     FROM ticket_responses r
+     JOIN users u ON u.id = r.user_id
+     WHERE r.ticket_id = ? AND r.is_deleted = 0
+     ORDER BY r.created_at ASC`,
+    [ticketId]
+  );
 
   return rows;
 };

@@ -11,7 +11,7 @@
   <script src="../js/ui-modals.js"></script>
   <script src="../js/utils.js"></script>
   <script src="./common.js"></script>
-  <script src="./ticket-detail.js" defer></script>
+  <script src="./ticket-detail.js?v=2" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -144,8 +144,8 @@
 
                 <div class="field">
                   <label for="responseAttachment">Attachment</label>
-                  <input id="responseAttachment" type="file" disabled>
-                  <small class="field-help">Attachment upload is not available on the current API.</small>
+                  <input id="responseAttachment" name="attachment" type="file" accept="image/*,.pdf">
+                  <small class="field-help">Attach a photo or document to this ticket response.</small>
                 </div>
               </div>
 

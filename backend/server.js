@@ -2,6 +2,8 @@ require('dotenv').config();
  
 const express  = require('express');
 const cors     = require('cors');
+const path     = require('path');
+const fs       = require('fs');
  
 // ── DB pool (import triggers the connection health check) ──
 require('./config/db');
@@ -15,6 +17,7 @@ const departmentRoutes = require('./routes/departments.routes');
 const logRoutes        = require('./routes/logs.routes');
 const profileRoutes    = require('./routes/profile.routes');
 const adminRoutes      = require('./routes/admin.routes');
+const passwordRecoveryRoutes = require('./routes/password-recovery.routes');
 const { authenticate, authorize } = require('./middleware/auth');
 const ticketService = require('./services/ticket.service');
  
@@ -29,6 +32,16 @@ app.use(cors({
 }));
  
 app.use(express.json());
+// Ensure uploads directory exists so multer can write files
+const uploadsDir = path.join(__dirname, 'uploads', 'ticket_responses');
+try {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('[Server] ensured uploads directory exists:', uploadsDir);
+} catch (e) {
+  console.error('[Server] failed to create uploads directory:', e.message);
+}
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Simple API request logger to aid debugging routes
 app.use((req, res, next) => {
@@ -57,6 +70,11 @@ app.use('/api/companies',   companyRoutes);
 app.use('/api/departments', departmentRoutes); 
 app.use('/api/logs',        logRoutes);
 app.use('/api/profile',     profileRoutes);
+// Ensure password-recovery routes are mounted before the admin router so
+// requests to `/api/admin/password-recovery-requests` are handled by the
+// dedicated password-recovery router instead of being captured (and 404'd)
+// by the `/api/admin` router which doesn't define that path.
+app.use('/api',             passwordRecoveryRoutes);
 app.use('/api/admin',       adminRoutes);
  
 // Fallback DELETE handler for ticket response removals.

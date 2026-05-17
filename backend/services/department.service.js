@@ -1,6 +1,49 @@
 const pool = require('../config/db');
 const logService = require('./log.service');
 
+const DEPARTMENT_KEYWORDS = [
+  'department', 'support', 'hr', 'it', 'billing', 'finance', 'accounts',
+  'operations', 'facilities', 'security', 'compliance', 'customer', 'technical',
+  'sales', 'procurement', 'logistics', 'service', 'administration', 'staff'
+];
+
+function normalizeName(value) {
+  return String(value || '').trim();
+}
+
+function looksLikeAcronym(name) {
+  return /^[A-Z]{2,5}$/.test(name);
+}
+
+function isValidDepartmentName(name) {
+  const normalized = normalizeName(name);
+  if (!normalized) return false;
+
+  const lower = normalized.toLowerCase();
+  if (looksLikeAcronym(normalized)) {
+    return ['hr', 'it', 'qa', 'ux', 'ui', 'pr', 'hr'].includes(lower);
+  }
+
+  if (DEPARTMENT_KEYWORDS.some((term) => lower.includes(term))) {
+    return true;
+  }
+
+  return false;
+}
+
+async function validateDepartmentName(name) {
+  const normalized = normalizeName(name);
+  if (!normalized) {
+    throw { status: 400, message: 'Department name is required.' };
+  }
+
+  if (!isValidDepartmentName(normalized)) {
+    throw { status: 400, message: 'Department name must be a valid department (e.g. IT Department, HR, Billing, Technical Support).' };
+  }
+
+  return normalized;
+}
+
 // -------------------------------------------------------
 // Business logic for managing departments (admin-only).
 // -------------------------------------------------------
@@ -34,10 +77,7 @@ const getById = async (id) => {
 };
 
 const create = async ({ name, manager_id, is_active = 1 }, adminId) => {
-  const trimmedName = String(name || '').trim();
-  if (!trimmedName) {
-    throw { status: 400, message: 'Department name is required.' };
-  }
+  const trimmedName = await validateDepartmentName(name);
 
   const [existing] = await pool.query(
     'SELECT id FROM departments WHERE name = ?',
@@ -82,13 +122,10 @@ const update = async (id, data, adminId) => {
   }
 
   if (Object.prototype.hasOwnProperty.call(data, 'name')) {
-    const trimmedName = String(data.name || '').trim();
-    if (!trimmedName) {
-      throw { status: 400, message: 'Department name is required.' };
-    }
+    data.name = await validateDepartmentName(data.name);
     const [existing] = await pool.query(
       'SELECT id FROM departments WHERE name = ? AND id != ?',
-      [trimmedName, id]
+      [data.name, id]
     );
     if (existing.length > 0) {
       throw { status: 400, message: 'Department name already exists.' };

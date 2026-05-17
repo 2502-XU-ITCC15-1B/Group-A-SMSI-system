@@ -4,11 +4,12 @@ const mailService = require('./mail.service');
 
 const generateWorkOrderId = async () => {
   const year = new Date().getFullYear();
-  const [rows] = await pool.query(
+  const result = await pool.query(
     'SELECT COUNT(*) AS total FROM tickets WHERE EXTRACT(YEAR FROM created_at) = $1',
     [year]
   );
 
+  const rows = result.rows;
   const seq = String(rows[0].total + 1).padStart(4, '0');
   return `WO-${year}-${seq}`;
 };
@@ -42,8 +43,8 @@ const getAll = async (user, filters = {}) => {
     sql += ` AND t.technician_id = $${paramIndex++}`;
     values.push(user.id);
   } else if (user.role === 'head') {
-    sql += ` AND (t.department_id = $${paramIndex++} OR t.department_id IS NULL)`;
-    values.push(user.department_id || null);
+    sql += ` AND t.department_id = $${paramIndex++}`;
+    values.push(user.department_id);
   }
 
   if (filters.status) {
@@ -68,8 +69,8 @@ const getAll = async (user, filters = {}) => {
 
   sql += ' ORDER BY t.created_at DESC';
 
-  const [rows] = await pool.query(sql, values);
-  return rows;
+  const result = await pool.query(sql, values);
+  return result.rows;
 };
 
 // ── getMine ────────────────────────────────────────────
@@ -83,7 +84,8 @@ const getMine = async (user) => {
 // Fetch single ticket with strict access control
 // -------------------------------------------------------
 const getById = async (id, user) => {
-  const [rows] = await pool.query(BASE_SELECT + ' WHERE t.id = $1 AND t.is_deleted = 0', [id]);
+  const result = await pool.query(BASE_SELECT + ' WHERE t.id = $1 AND t.is_deleted = 0', [id]);
+  const rows = result.rows;
 
   if (rows.length === 0) {
     throw { status: 404, message: 'Ticket not found.' };
@@ -112,7 +114,7 @@ const getById = async (id, user) => {
 const create = async (data, user) => {
   const work_order_id = await generateWorkOrderId();
 
-  const [result] = await pool.query(
+  const result = await pool.query(
     `INSERT INTO tickets
       (work_order_id, title, description, company_id, department_id, requestor_id, priority, status)
      VALUES ($1, $2, $3, $4, $5, $6, $7, 'Open')
@@ -128,8 +130,9 @@ const create = async (data, user) => {
     ]
   );
 
+  const ticketId = result.rows?.[0]?.id;
   await logService.record({
-    ticketId: result.id,
+    ticketId,
     userId: user.id,
     action: 'TICKET_CREATED',
     details: `Work order ${work_order_id} created.`
@@ -142,7 +145,7 @@ const create = async (data, user) => {
 // Updates ticket fields (partial update supported)
 // -------------------------------------------------------
 const update = async (ticketId, data, user) => {
-  const [result] = await pool.query(
+  const result = await pool.query(
     `UPDATE tickets
      SET title = COALESCE($1, title),
          description = COALESCE($2, description),
@@ -180,7 +183,7 @@ const updateStatus = async (ticketId, status, user) => {
     throw { status: 403, message: 'Only an administrator or department head can close tickets.' };
   }
 
-  const [result] = await pool.query(
+  const result = await pool.query(
     `UPDATE tickets
      SET status = $1,
          resolved_at = CASE WHEN $1 = 'Resolved' THEN NOW() ELSE resolved_at END,
@@ -218,7 +221,7 @@ const assign = async (ticketId, data, user) => {
     throw { status: 403, message: 'Admins may only forward tickets to department heads. Department heads assign technicians.' };
   }
 
-  const [result] = await pool.query(
+  const result = await pool.query(
     `UPDATE tickets
      SET technician_id = COALESCE($1, technician_id),
          department_id = COALESCE($2, department_id),
@@ -245,7 +248,7 @@ const assign = async (ticketId, data, user) => {
 // Closes ticket + sends resolution email
 // -------------------------------------------------------
 const close = async (ticketId, user) => {
-  const [rows] = await pool.query(
+  const result = await pool.query(
     `SELECT t.*, u.email AS requester_email, u.name AS requester_name
      FROM tickets t
      LEFT JOIN users u ON u.id = t.requestor_id
@@ -253,6 +256,7 @@ const close = async (ticketId, user) => {
     [ticketId]
   );
 
+  const rows = result.rows;
   if (rows.length === 0) {
     throw { status: 404, message: 'Ticket not found.' };
   }
@@ -296,72 +300,72 @@ const addResponse = async (ticketId, data, user) => {
 
   await getById(ticketId, user);
 
-  await pool.query(
+  const insertResult = await pool.query(
     `INSERT INTO ticket_responses (ticket_id, user_id, message, internal_note, attachment_url)
-     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id`,
     [ticketId, user.id, message, data.internal_note ? 1 : 0, data.attachment_url || null]
   );
 
-  // capture inserted response id when available
-  const inserted = await pool.query('SELECT LASTVAL() as id').catch(() => null);
-  let responseId = null;
-  try {
-    if (inserted && inserted.rows && inserted.rows[0]) responseId = inserted.rows[0].id;
-  } catch (e) {
-    responseId = null;
+  const responseId = insertResult.rows?.[0]?.id;
+  if (!responseId) {
+    throw { status: 500, message: 'Failed to save response.' };
   }
+
+  const responseResult = await pool.query(
+    `SELECT r.id, r.ticket_id, r.user_id, r.message, r.internal_note, r.attachment_url, r.created_at,
+            u.name AS author_name, u.role AS author_role
+     FROM ticket_responses r
+     JOIN users u ON u.id = r.user_id
+     WHERE r.id = $1`,
+    [responseId]
+  );
 
   await logService.record({
     ticketId,
     userId: user.id,
     action: 'RESPONSE_ADDED',
-    details: `Response added; response_id=${responseId}`
+    details: 'A response was added to the ticket.'
   });
 
-  return { message: 'Response submitted.' };
+  return {
+    message: 'Response submitted.',
+    response: responseResult.rows[0] || null
+  };
 };
 
 // ── getResponses ───────────────────────────────────────
 // Retrieves all responses for a ticket
 // -------------------------------------------------------
 const getResponses = async (ticketId, user) => {
-  await getById(ticketId, user);
+  const ticketRes = await pool.query('SELECT id, company_id, department_id, technician_id FROM tickets WHERE id = $1 AND is_deleted = 0', [ticketId]);
+  const ticketRows = ticketRes.rows;
+  if (ticketRows.length === 0) {
+    throw { status: 404, message: 'Ticket not found.' };
+  }
 
-  const [rows] = await pool.query(
-    `SELECT r.*, u.name AS author_name, u.role AS author_role
+  const ticket = ticketRows[0];
+
+  if (['admin', 'technician', 'head'].includes(user.role)) {
+    // allowed
+  } else if (user.role === 'client') {
+    if (ticket.company_id !== user.company_id) throw { status: 403, message: 'Access denied.' };
+  } else {
+    throw { status: 403, message: 'Access denied.' };
+  }
+
+  const result = await pool.query(
+    `SELECT r.id, r.ticket_id, r.user_id, r.message, r.internal_note, r.created_at, r.is_deleted,
+            r.attachment_url,
+            u.name AS author_name, u.role AS author_role
      FROM ticket_responses r
      JOIN users u ON u.id = r.user_id
-     WHERE r.ticket_id = $1 AND r.is_deleted = FALSE
+     WHERE r.ticket_id = $1 AND r.is_deleted = 0
      ORDER BY r.created_at ASC`,
     [ticketId]
   );
 
-  return rows;
-};
-
-// Soft-delete a response (admin only)
-const removeResponse = async (ticketId, responseId, adminUser, reason = null) => {
-  await getById(ticketId, adminUser);
-
-  const [rows] = await pool.query(
-    'SELECT r.* FROM ticket_responses r WHERE r.id = $1 AND r.ticket_id = $2',
-    [responseId, ticketId]
-  );
-
-  if (!rows.length) {
-    throw { status: 404, message: 'Response not found.' };
-  }
-
-  await pool.query('UPDATE ticket_responses SET is_deleted = TRUE WHERE id = $1', [responseId]);
-
-  await logService.record({
-    ticketId,
-    userId: adminUser.id,
-    action: 'RESPONSE_REMOVED',
-    details: `Response ${responseId} removed by admin ${adminUser.id}.${reason ? ' Reason: ' + reason : ''}`
-  });
-
-  return { success: true, message: 'Response removed.' };
+  return result.rows;
 };
 
 // ── remove ─────────────────────────────────────────────

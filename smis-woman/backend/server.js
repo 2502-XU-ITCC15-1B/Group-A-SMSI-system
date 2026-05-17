@@ -16,6 +16,7 @@ const departmentRoutes = require('./routes/departments.routes');
 const logRoutes        = require('./routes/logs.routes');
 const profileRoutes    = require('./routes/profile.routes');
 const adminRoutes      = require('./routes/admin.routes');
+const passwordRecoveryRoutes = require('./routes/password-recovery.routes');
  
 // ── App setup ──────────────────────────────────────────────
 const app = express();
@@ -52,6 +53,10 @@ app.use('/api/companies',   companyRoutes);
 app.use('/api/departments', departmentRoutes); 
 app.use('/api/logs',        logRoutes);
 app.use('/api/profile',     profileRoutes);
+// Mount password-recovery routes before the admin router so the dedicated
+// password-recovery endpoints under `/api/admin/*` are not shadowed by
+// the `/api/admin` router which doesn't define them.
+app.use('/api',             passwordRecoveryRoutes);
 app.use('/api/admin',       adminRoutes);
  
 // ── 404 handler — unknown API routes ──────────────────────

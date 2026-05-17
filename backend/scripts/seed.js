@@ -159,8 +159,8 @@ const logs = [
       const hash = await bcrypt.hash(u.password, SALT_ROUNDS);
 
       await pool.query(
-        `INSERT INTO users (name, email, password_hash, role, company_id, department_id)
-         VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO users (name, email, password_hash, role, company_id, department_id, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            name = VALUES(name),
            password_hash = VALUES(password_hash),
@@ -168,7 +168,7 @@ const logs = [
            company_id = VALUES(company_id),
            department_id = VALUES(department_id),
            is_active = 1`,
-        [u.name, u.email, hash, u.role, u.company_id, u.department_id]
+        [u.name, u.email, hash, u.role, u.company_id, u.department_id, 1]
       );
     }
 
@@ -268,6 +268,8 @@ const logs = [
         [ticketIds['WO-2026-0001'], userIds['admin@smsi.com'], l.action, l.details]
       );
     }
+
+    await pool.query('SET FOREIGN_KEY_CHECKS = 1');
 
     console.log('Seed completed successfully');
     process.exit(0);

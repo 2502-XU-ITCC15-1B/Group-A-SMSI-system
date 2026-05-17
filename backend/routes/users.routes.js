@@ -68,6 +68,15 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const result = await userService.update(req.params.id, req.body, req.user.id);
+
+    // If admin included a password in the update payload, perform the reset explicitly
+    if (Object.prototype.hasOwnProperty.call(req.body, 'password')) {
+      // delegate to the dedicated reset function to ensure consistent behavior
+      const pwResult = await userService.resetPassword(req.params.id, req.body.password, req.user.id);
+      // merge messages
+      return res.json({ success: true, message: `${result.message} ${pwResult.message}`.trim() });
+    }
+
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({

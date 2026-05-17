@@ -155,6 +155,13 @@ async function resetPassword(token, new_password) {
   });
 }
 
+async function submitPasswordRecoveryRequest(email) {
+  return await apiRequest('/password-recovery', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  });
+}
+
 /* ===========================================================
    TICKETS
 =========================================================== */
@@ -174,7 +181,23 @@ async function fetchTicket(id) {
   return res?.ticket || null;
 }
 
-async function createTicket(payload) {
+async function createTicket(payload, attachmentFile) {
+  if (attachmentFile) {
+    const formData = new FormData();
+    formData.append('title', payload.title);
+    formData.append('description', payload.description);
+    formData.append('priority', payload.priority);
+    if (payload.requestor_id) formData.append('requestor_id', payload.requestor_id);
+    if (payload.client_id) formData.append('client_id', payload.client_id);
+    if (payload.company_id) formData.append('company_id', payload.company_id);
+    if (payload.department_id) formData.append('department_id', payload.department_id);
+    formData.append('attachment', attachmentFile);
+    return await apiRequest('/tickets', {
+      method: 'POST',
+      body: formData
+    });
+  }
+
   return await apiRequest('/tickets', {
     method: 'POST',
     body: JSON.stringify(payload)
