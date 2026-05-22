@@ -54,6 +54,10 @@ router.get('/admin/password-recovery-requests', authenticate, authorize('admin')
       requests: requests || []
     });
   } catch (err) {
+    if (err && err.code === 'ER_NO_SUCH_TABLE') {
+      return res.json({ success: true, requests: [] });
+    }
+
     res.status(err.status || 500).json({
       success: false,
       message: err.message
@@ -93,6 +97,13 @@ router.patch('/admin/password-recovery-requests/:id/resolve', authenticate, auth
       message: 'Recovery request resolved.'
     });
   } catch (err) {
+    if (err && err.code === 'ER_NO_SUCH_TABLE') {
+      return res.status(404).json({
+        success: false,
+        message: 'Recovery request not found.'
+      });
+    }
+
     res.status(err.status || 500).json({
       success: false,
       message: err.message

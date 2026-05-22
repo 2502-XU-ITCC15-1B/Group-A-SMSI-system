@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Client Inbox</title>
+  <link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+  <div class="app-shell">
+    <div data-client-sidebar></div>
+
+    <div class="main">
+      <div data-client-topbar></div>
+
+      <main class="content stack">
+        <p id="messagesMessage" class="form-msg" aria-live="polite"></p>
+
+        <section class="card stack">
+          <div class="section-head"><div>
+            <h2 class="section-title">Contact Administrator</h2>
+            <p class="section-subtitle">Your private channel to the support team.</p>
+          </div></div>
+
+          <div class="stack">
+            <p>Select the admin team or your department head to send a secure message.</p>
+            <div class="form-row">
+              <div class="field"><label>Admin Team</label><input type="text" readonly value="SMSi Admin Team"></div>
+              <div class="field"><label>Support Email</label><input type="email" readonly value="admin@smsi.com"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card stack">
+          <div class="section-head"><div>
+            <h2 class="section-title">Message Thread</h2>
+            <p class="section-subtitle">Your latest messages with the admin team.</p>
+          </div></div>
+
+          <ul id="clientMessageThread" class="message-thread"><li class="message-empty">Loading messages...</li></ul>
+
+          <form id="clientMessageForm" class="stack">
+            <div class="field">
+              <label for="clientMessageRecipient">Send to</label>
+              <select id="clientMessageRecipient" required>
+                <option value="">Loading recipients...</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="clientMessageText">New Message</label>
+              <textarea id="clientMessageText" rows="5" required placeholder="Type your concern here..."></textarea>
+            </div>
+            <p id="clientMessageStatus" class="form-msg" aria-live="polite"></p>
+            <div class="form-actions">
+              <button class="btn primary" type="submit">Send Message</button>
+              <button class="btn secondary" type="button" id="refreshThreadBtn">Refresh</button>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/client.js"></script>
+  <script src="/client/messages.js"></script>
+</body>
+</html>

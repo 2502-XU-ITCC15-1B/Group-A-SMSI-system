@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadTickets() {
-  tickets = await fetchTickets();
+  tickets = await fetchMyTickets();
   applyFilters();
 }
 

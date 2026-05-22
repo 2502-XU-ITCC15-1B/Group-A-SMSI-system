@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(150) NOT NULL,
   email VARCHAR(150) NOT NULL UNIQUE,
+  phone VARCHAR(30) NULL,
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('admin','head','technician','client') NOT NULL,
   company_id BIGINT UNSIGNED NULL,
@@ -159,7 +160,27 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 );
 
 -- ============================================================
--- TABLE 8: password_resets
+-- TABLE 8: messages
+-- ============================================================
+CREATE TABLE IF NOT EXISTS messages (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  sender_id BIGINT UNSIGNED NOT NULL,
+  receiver_id BIGINT UNSIGNED NOT NULL,
+  message TEXT NOT NULL,
+  is_read TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_messages_sender
+    FOREIGN KEY (sender_id) REFERENCES users(id)
+    ON DELETE RESTRICT,
+
+  CONSTRAINT fk_messages_receiver
+    FOREIGN KEY (receiver_id) REFERENCES users(id)
+    ON DELETE RESTRICT
+);
+
+-- ============================================================
+-- TABLE 9: password_resets
 -- ============================
 CREATE TABLE IF NOT EXISTS password_resets (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

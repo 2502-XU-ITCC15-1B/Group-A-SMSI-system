@@ -418,6 +418,49 @@ tbody tr:hover{
   line-height:22px
 }
 
+.message-thread {
+  min-height: 320px;
+  max-height: 560px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-soft);
+  border-radius: 12px;
+}
+
+.chat-bubble {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: min(100%, 780px);
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid transparent;
+  box-shadow: var(--shadow-sm);
+}
+
+.chat-bubble.chat-incoming {
+  align-self: flex-start;
+  background: #eff6ff;
+}
+
+.chat-bubble.chat-outgoing {
+  align-self: flex-end;
+  background: #dbeafe;
+}
+
+.chat-bubble-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .topbar{
   gap:16px
 }
@@ -656,6 +699,14 @@ tbody tr:hover{
   align-items:center;
   justify-content:center;
   font-weight:700
+}
+
+.admin-avatar-img{
+  width:40px;
+  height:40px;
+  border-radius:999px;
+  object-fit:cover;
+  display:inline-block;
 }
 
 .sidebar-logout{

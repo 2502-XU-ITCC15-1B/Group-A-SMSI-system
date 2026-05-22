@@ -59,6 +59,21 @@ const getAll = async () => {
   return rows;
 };
 
+async function validateDepartmentManager(manager_id) {
+  if (!manager_id) return;
+  const [rows] = await pool.query(
+    'SELECT role FROM users WHERE id = $1',
+    [manager_id]
+  );
+  if (rows.length === 0) {
+    throw { status: 400, message: 'Selected manager does not exist.' };
+  }
+  const validRoles = ['admin', 'manager'];
+  if (!validRoles.includes(String(rows[0].role || '').toLowerCase())) {
+    throw { status: 400, message: 'Department manager must be an Admin or Manager.' };
+  }
+}
+
 const getById = async (id) => {
   const [rows] = await pool.query(
     'SELECT * FROM departments WHERE id = $1',
@@ -74,6 +89,11 @@ const getById = async (id) => {
 
 const create = async ({ name, manager_id, is_active = 1 }, adminId) => {
   const trimmedName = await validateDepartmentName(name);
+
+  if (manager_id) {
+    await validateDepartmentManager(manager_id);
+  }
+
   const [result] = await pool.query(
     `INSERT INTO departments (name, manager_id, is_active)
      VALUES ($1, $2, $3)
@@ -97,6 +117,10 @@ const update = async (id, data, adminId) => {
 
   if (Object.prototype.hasOwnProperty.call(data, 'name')) {
     data.name = await validateDepartmentName(data.name);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'manager_id') && data.manager_id) {
+    await validateDepartmentManager(data.manager_id);
   }
 
   ['name', 'manager_id', 'is_active'].forEach((field) => {

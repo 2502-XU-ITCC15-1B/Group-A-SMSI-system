@@ -1,4 +1,6 @@
 window.Auth = (() => {
+  const SESSION_ALLOWED_ROLES = ['admin', 'head', 'client', 'technician'];
+
   function normalizeRoles(input) {
     if (input.length === 1 && Array.isArray(input[0])) {
       return input[0];
@@ -20,12 +22,16 @@ window.Auth = (() => {
   }
 
   async function requireRoleAsync(...roles) {
-    const allowedRoles = normalizeRoles(roles);
+    const normalizedRoles = normalizeRoles(roles).map((role) => String(role || '').trim().toLowerCase());
+    const allowedRoles = normalizedRoles.length ? normalizedRoles : SESSION_ALLOWED_ROLES;
     let user = getUser();
 
     if (!getToken()) {
-      window.location.href = '/login.html';
-      return null;
+      if (!user) {
+        console.log('requireRoleAsync: no token and no stored user, redirecting');
+        window.location.href = '/login.html';
+        return null;
+      }
     }
 
     if (!user) {
@@ -33,13 +39,16 @@ window.Auth = (() => {
     }
 
     if (!user) {
+      console.log('requireRoleAsync: no user after hydrateSession, redirecting');
       window.location.href = '/login.html';
       return null;
     }
 
-    if (allowedRoles.length && !allowedRoles.includes(user.role)) {
+    const actualRole = String(user.role || '').trim();
+    console.log('requireRoleAsync current role:', actualRole, 'allowed:', allowedRoles);
+
+    if (!allowedRoles.includes(actualRole.toLowerCase())) {
       alert('Access denied.');
-      // Imbes moadto sa login, i-redirect nato sa ilang saktong dashboard
       window.location.href = ticketListUrlFor(user);
       return null;
     }

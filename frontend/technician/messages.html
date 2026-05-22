@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Messages</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="./common.js"></script>
+  <script src="./messages.js" defer></script>
+  <style>
+    .thread-summary { display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between; }
+    .message-thread { list-style:none; margin:0; padding:0; display:grid; gap:1rem; }
+    .message-item { padding:1rem; border-radius:0.75rem; border:1px solid var(--border); max-width:80%; line-height:1.5; }
+    .message-item.sent { margin-left:auto; background:rgba(0,110,255,0.08); border-color:rgba(0,110,255,0.16); }
+    .message-item.received { margin-right:auto; background:rgba(30,30,30,0.04); }
+    .message-meta { display:flex; justify-content:space-between; gap:0.75rem; color:var(--muted); font-size:0.95rem; margin-bottom:0.75rem; }
+    .message-content { white-space:pre-wrap; }
+    .message-empty { padding:1.5rem; text-align:center; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="../assets/logo.png" alt="SMSi">
+        <div>
+          <strong>SMSi</strong>
+          <span id="portalLabel">technician portal</span>
+        </div>
+      </div>
+
+      <nav>
+        <a class="nav-item" data-nav="dashboard" href="/technician/dashboard.html">Dashboard</a>
+        <a class="nav-item" data-nav="tickets" href="/technician/tickets.html">Tickets</a>
+        <a class="nav-item" data-nav="activity" href="/technician/activity.html">Activity</a>
+        <a class="nav-item active" data-nav="messages" href="/technician/messages.html">Messages</a>
+        <a class="nav-item" data-nav="profile" href="/technician/profile.html">Profile</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user-label">Signed in as</div>
+        <div class="sidebar-user" id="sessionUserName">Loading...</div>
+        <div class="sidebar-company" id="sessionUserMeta">Loading...</div>
+        <button class="btn secondary sidebar-logout" id="technicianLogoutBtn" type="button" aria-label="Logout" onclick="window.technicianLogout?.(event)">Logout</button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-meta">
+          <nav class="breadcrumbs">
+            <span class="crumb">Operations</span>
+            <span class="crumb current">Messages</span>
+          </nav>
+          <div>
+            <h1 class="page-title">Admin Inbox</h1>
+            <p class="page-subtitle">Send private messages to the admin team and review replies here.</p>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="btn secondary" id="refreshBtn" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <main class="content stack">
+        <p id="messagesMessage" class="form-msg" aria-live="polite"></p>
+
+        <section class="card stack">
+          <div class="section-head"><div><h2 class="section-title">Contact Administrator</h2><p class="section-subtitle">Your private communication channel with the support team.</p></div></div>
+          <div class="stack">
+            <p>The admin team will receive your messages privately and respond directly in this inbox.</p>
+            <div class="form-row">
+              <div class="field"><label>Admin Team</label><input type="text" readonly value="SMSi Admin Team"></div>
+              <div class="field"><label>Support Email</label><input type="email" readonly value="admin@smsi.com"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card stack">
+          <div class="section-head"><div><h2 class="section-title">Message Thread</h2><p class="section-subtitle">Your latest messages with the admin team.</p></div></div>
+
+          <ul id="messageThread" class="message-thread"><li class="message-empty">Loading messages...</li></ul>
+
+          <form id="messageForm" class="stack">
+            <div class="field"><label for="newMessage">New Message</label><textarea id="newMessage" rows="5" placeholder="Type your message here..." required></textarea></div>
+            <div class="form-actions"><button class="btn primary" id="sendMessageBtn" type="submit">Send Message</button><button class="btn secondary" id="refreshThreadBtn" type="button">Refresh</button></div>
+          </form>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

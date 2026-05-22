@@ -4,6 +4,7 @@ window.ClientPortal = (() => {
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', href: '/client/dashboard.html', icon: 'dashboard' },
     { key: 'requests', label: 'My Requests', href: '/client/requests.html', icon: 'ticket' },
+    { key: 'messages', label: 'Inbox', href: '/client/messages.html', icon: 'mail' },
     { key: 'profile', label: 'Profile', href: '/client/profile.html', icon: 'settings' }
   ];
 
@@ -50,37 +51,49 @@ window.ClientPortal = (() => {
 
     if (!sidebarHost) return;
 
-    sidebarHost.innerHTML = `
-      <aside class="sidebar">
-        <div class="brand">
-          <img src="/assets/logo.png" alt="SMSi">
-          <div>
-            <strong>SMSi</strong>
-            <span>client portal</span>
+    if (window.SharedNav && typeof window.SharedNav.getNavHtml === 'function') {
+      sidebarHost.innerHTML = window.SharedNav.getNavHtml('client', user, activeNav);
+    } else {
+      sidebarHost.innerHTML = `
+        <aside class="sidebar">
+          <div class="brand">
+            <img src="/assets/logo.png" alt="SMSi">
+            <div>
+              <strong>SMSi</strong>
+              <span>client portal</span>
+            </div>
           </div>
-        </div>
 
-        <nav>
-          ${navItems.map((item) => `
-            <a class="nav-item ${activeNav === item.key ? 'active' : ''}" href="${item.href}">
-              ${icon(item.icon)}<span>${escapeHtml(item.label)}</span>
-            </a>
-          `).join('')}
-        </nav>
+          <nav>
+            ${navItems.map((item) => `
+              <a class="nav-item ${activeNav === item.key ? 'active' : ''}" href="${item.href}">
+                ${icon(item.icon)}<span>${escapeHtml(item.label)}</span>
+              </a>
+            `).join('')}
+          </nav>
 
-        <div class="sidebar-footer">
-          <div class="sidebar-user-label">Signed in as</div>
-          <div class="sidebar-user">${escapeHtml(user.name || 'Client User')}</div>
-          <div class="sidebar-company">${escapeHtml(user.company_name || 'Client Account')}</div>
-          <button class="btn secondary sidebar-logout" id="clientSidebarLogoutBtn" type="button">${icon('logout')}Logout</button>
-        </div>
-      </aside>
-    `;
+          <div class="sidebar-footer">
+            <div class="sidebar-user-label">Signed in as</div>
+            <div class="sidebar-user">${escapeHtml(user.name || 'Client User')}</div>
+            <div class="sidebar-company">${escapeHtml(user.company_name || 'Client Account')}</div>
+            <button class="btn secondary sidebar-logout" id="clientSidebarLogoutBtn" type="button">${icon('logout')}Logout</button>
+          </div>
+        </aside>
+      `;
+    }
 
-    document.getElementById('clientSidebarLogoutBtn')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.logout();
-    });
+    // wire logout button
+    let logoutBtn = document.getElementById('clientSidebarLogoutBtn');
+    if (!logoutBtn) {
+      // fallback: SharedNav may render a logout button without an id
+      logoutBtn = sidebarHost.querySelector('.sidebar-logout');
+    }
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.logout();
+      });
+    }
   }
 
   function renderTopbar({ title, subtitle = '', breadcrumbs = [], actionsHtml = '' }) {

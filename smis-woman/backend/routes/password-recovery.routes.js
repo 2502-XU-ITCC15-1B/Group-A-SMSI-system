@@ -38,7 +38,7 @@ router.post('/', async (req, res) => {
 // GET /api/admin/password-recovery-requests
 router.get('/admin/password-recovery-requests', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { rows } = await pool.query(
+    const result = await pool.query(
       `SELECT id, email, status, created_at
        FROM password_recovery_requests
        WHERE status = 'pending'
@@ -46,12 +46,15 @@ router.get('/admin/password-recovery-requests', authenticate, authorize('admin')
        LIMIT 50`
     );
 
-    res.json({ success: true, requests: rows || [] });
+    const requests = (result && result.rows) ? result.rows : [];
+    res.json({ success: true, requests });
   } catch (err) {
-    res.status(err.status || 500).json({
-      success: false,
-      message: err.message
-    });
+    // Handle missing table for both PostgreSQL and MySQL
+    if (err && (err.code === '42P01' || err.code === 'ER_NO_SUCH_TABLE')) {
+      return res.json({ success: true, requests: [] });
+    }
+
+    res.status(err.status || 500).json({ success: false, message: err.message });
   }
 });
 
@@ -66,7 +69,7 @@ router.patch('/admin/password-recovery-requests/:id/resolve', authenticate, auth
       [id]
     );
 
-    if (result.rowCount === 0) {
+    if (!result || result.rowCount === 0) {
       return res.status(404).json({ success: false, message: 'Recovery request not found.' });
     }
 

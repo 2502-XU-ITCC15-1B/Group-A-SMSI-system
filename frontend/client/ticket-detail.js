@@ -90,12 +90,17 @@ async function loadResponses(ticketId) {
 function buildAttachmentUrl(url) {
   if (!url) return '';
 
-  const apiBase = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
-  const cleanedBase = apiBase ? apiBase.replace(/\/api\/?$/i, '') : '';
+  const apiBaseCandidate = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || window.LIVE_API || '';
+  const cleanedBase = apiBaseCandidate ? apiBaseCandidate.replace(/\/api\/?$/i, '').replace(/\/$/, '') : '';
 
   try {
     const parsed = new URL(url, window.location.href);
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      // If the URL explicitly points to localhost (from older DB values), replace host with configured backend base
+      const isLocalHost = ['localhost', '127.0.0.1'].includes(parsed.hostname);
+      if (isLocalHost && cleanedBase) {
+        return `${cleanedBase}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
       if (/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(url) || url.startsWith('//')) {
         return parsed.href;
       }
@@ -133,16 +138,180 @@ function isImageAttachment(url) {
 }
 
 function renderAttachmentHtml(url, attachmentType) {
-  const fullUrl = ClientPortal.escapeHtml(buildAttachmentUrl(url));
+  // Build absolute URL by combining configured backend base with the relative path
+  const apiBase = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
+  let backendBase = apiBase ? apiBase.replace(/\/api\/?$/i, '').replace(/\/$/, '') : '';
+  if (!backendBase && window.LIVE_API) {
+    backendBase = window.LIVE_API.replace(/\/api\/?$/i, '');
+  }
+  const fullLink = /^https?:\/\//i.test(url) ? url : `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
+  const fullUrl = ClientPortal.escapeHtml(fullLink);
   const fileName = decodeURIComponent((url.split('/').pop() || 'attachment'));
   const label = '<p class="attachment-label">This user has sent an attachment, along with the ticket</p>';
 
-  if (attachmentType === 'image' || (attachmentType == null && isImageAttachment(url))) {
-    return `${label}<div class="timeline-attachment-wrap"><img class="timeline-attachment" src="${fullUrl}" alt="attachment"><p><a class="response-attachment" href="${fullUrl}" target="_blank" rel="noopener">Open attachment</a></p></div>`;
+    if (attachmentType === 'image' || (attachmentType == null && isImageAttachment(url))) {
+    return `${label}<div class="timeline-attachment-wrap"><img class="timeline-attachment" src="${fullUrl}" alt="attachment"><p><a class="response-attachment" href="${fullUrl}" target="_blank" rel="noopener noreferrer">Open attachment</a></p></div>`;
   }
 
-  return `${label}<div class="timeline-attachment-wrap"><p><a class="attachment-file-link" href="${fullUrl}" target="_blank" rel="noopener">Download attachment: ${ClientPortal.escapeHtml(fileName)}</a></p></div>`;
+  return `${label}<div class="timeline-attachment-wrap"><p><a class="attachment-file-link" href="${fullUrl}" target="_blank" rel="noopener noreferrer">Download attachment: ${ClientPortal.escapeHtml(fileName)}</a></p></div>`;
 }
+
+// Authenticated download helper: fetches using stored Bearer token, converts to blob, and triggers a clean download
+async function authenticatedDownload(url, suggestedFilename) {
+  try {
+    const token = typeof getToken === 'function' ? getToken() : null;
+    if (!token) {
+      alert('You are not authenticated. Please sign in to download attachments.');
+      return;
+    }
+
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      // do not include credentials by default; token is sufficient
+      redirect: 'follow'
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      alert('Unauthorized to access this attachment. Please refresh your session.');
+      return;
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.error('Attachment download failed', res.status, text);
+      alert('Failed to download attachment.');
+      return;
+    }
+
+    const blob = await res.blob();
+
+    // Try to derive filename from Content-Disposition header if not provided
+    let filename = suggestedFilename || '';
+    const cd = res.headers.get('Content-Disposition') || '';
+    const match = cd.match(/filename\*=UTF-8''([^;\n\r]+)|filename="?([^";]+)"?/i);
+    if (!filename && match) {
+      filename = decodeURIComponent(match[1] || match[2] || 'attachment');
+    }
+    if (!filename) {
+      try {
+        const u = new URL(url);
+        filename = decodeURIComponent((u.pathname.split('/').pop() || 'attachment'));
+      } catch (e) {
+        filename = 'attachment';
+      }
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    // Append to DOM to make click() work in all browsers
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoke after a short delay to ensure download started
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+
+  } catch (err) {
+    console.error('authenticatedDownload error', err);
+    alert('An error occurred while downloading the attachment.');
+  }
+}
+
+// Global click handler to intercept attachment links rendered above and use authenticatedDownload
+document.addEventListener('click', (e) => {
+  const el = e.target.closest && e.target.closest('.attachment-file-link');
+  if (!el) return;
+  // If the link has an href to the backend uploads, intercept and download with auth
+  const href = el.href;
+  if (!href) return;
+  e.preventDefault();
+  const suggested = el.getAttribute('data-filename') || (href.split('/').pop() || 'attachment');
+  authenticatedDownload(href, suggested);
+});
+
+// Authenticated image opener: fetches image with Bearer token and opens in new window
+async function authenticatedOpenImage(url) {
+  const win = window.open('about:blank');
+  if (!win) {
+    alert('Unable to open attachment in a new window. Please allow popups and try again.');
+    return;
+  }
+  win.document.write('<!DOCTYPE html><html><head><title>Attachment</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;"><p>Loading attachment...</p></body></html>');
+  win.document.close();
+
+  try {
+    const token = typeof getToken === 'function' ? getToken() : null;
+    if (!token) {
+      win.document.body.innerHTML = '<p style="padding:1rem;">You are not authenticated. Please sign in to view attachments.</p>';
+      alert('You are not authenticated. Please sign in to view attachments.');
+      return;
+    }
+
+    const res = await fetch(url, { method: 'GET', headers: { 'Authorization': `Bearer ${token}` }, redirect: 'follow' });
+    if (res.status === 401 || res.status === 403) {
+      win.document.body.innerHTML = '<p style="padding:1rem;">Unauthorized to access this attachment.</p>';
+      alert('Unauthorized to access this attachment.');
+      return;
+    }
+    if (!res.ok) {
+      console.error('Image fetch failed', res.status);
+      win.document.body.innerHTML = `<p style="padding:1rem;">Failed to load attachment. (${res.status})</p>`;
+      alert('Failed to load attachment.');
+      return;
+    }
+
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const contentType = (res.headers.get('Content-Type') || '').toLowerCase();
+    win.document.body.style.margin = '0';
+    win.document.body.innerHTML = '';
+
+    if (contentType.startsWith('image/')) {
+      const img = win.document.createElement('img');
+      img.src = objectUrl;
+      img.style.maxWidth = '100%';
+      img.style.height = 'auto';
+      img.alt = '';
+      win.document.body.appendChild(img);
+    } else if (contentType.includes('pdf') || contentType === 'application/pdf') {
+      const embed = win.document.createElement('embed');
+      embed.src = objectUrl;
+      embed.type = 'application/pdf';
+      embed.style.width = '100%';
+      embed.style.height = '100vh';
+      win.document.body.appendChild(embed);
+    } else {
+      const obj = win.document.createElement('object');
+      obj.data = objectUrl;
+      obj.type = contentType || 'application/octet-stream';
+      obj.style.width = '100%';
+      obj.style.height = '100vh';
+      win.document.body.appendChild(obj);
+    }
+
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  } catch (err) {
+    console.error('authenticatedOpenImage error', err);
+    if (!win.closed) {
+      win.document.body.innerHTML = '<p style="padding:1rem;">An error occurred while opening the attachment.</p>';
+    }
+    alert('An error occurred while opening the image.');
+  }
+}
+
+// Intercept clicks on image open links
+document.addEventListener('click', (e) => {
+  const el = e.target.closest && e.target.closest('.response-attachment');
+  if (!el) return;
+  const href = el.href;
+  if (!href) return;
+  e.preventDefault();
+  authenticatedOpenImage(href);
+});
 
 function bindResponseForm(ticketId) {
   const form = document.getElementById('responseForm');

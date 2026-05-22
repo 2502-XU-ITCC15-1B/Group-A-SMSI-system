@@ -12,55 +12,90 @@ if (!apiBaseUrl) {
 /* ===========================================================
    SESSION HANDLING
 =========================================================== */
-const sessionKeys = ['woman_token', 'woman_user', 'woman_role'];
+const SESSION_BASE_KEYS = {
+  token: 'woman_token',
+  user: 'woman_user',
+  role: 'woman_role',
+  exp: 'woman_token_exp'
+};
 
-function storageGet(key) {
-  return localStorage.getItem(key) || sessionStorage.getItem(key);
+function getPageRole() {
+  const rawPath = String(window.location.pathname || window.location.href || '');
+  const segments = rawPath.split(/[\/]+/).map((segment) => String(segment || '').trim().toLowerCase()).filter(Boolean);
+  const role = segments.find((segment) => ['admin', 'client', 'technician', 'head'].includes(segment));
+  return role || '';
 }
 
-function storageSet(key, value) {
-  localStorage.setItem(key, value);
-  sessionStorage.setItem(key, value);
+function normalizeRole(role) {
+  return String(role || '').trim().toLowerCase();
 }
 
-function storageRemoveSession() {
-  sessionKeys.forEach((key) => {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
+function normalizeStorageRole(role) {
+  const normalized = normalizeRole(role);
+  return normalized === 'head' ? 'technician' : normalized;
+}
+
+function buildSessionKey(baseKey, role) {
+  const suffix = normalizeStorageRole(role) ? `_${normalizeStorageRole(role)}` : '';
+  return `${baseKey}${suffix}`;
+}
+
+function storageGet(key, role) {
+  const actualKey = buildSessionKey(SESSION_BASE_KEYS[key], role || getPageRole());
+  return localStorage.getItem(actualKey) || sessionStorage.getItem(actualKey);
+}
+
+function storageSet(key, value, role) {
+  const actualKey = buildSessionKey(SESSION_BASE_KEYS[key], role || getPageRole());
+  localStorage.setItem(actualKey, value);
+  sessionStorage.setItem(actualKey, value);
+}
+
+function storageRemoveSession(role = getPageRole()) {
+  const normalizedRole = normalizeStorageRole(role);
+  if (!normalizedRole) return;
+
+  ['token', 'user', 'role', 'exp'].forEach((key) => {
+    const actualKey = buildSessionKey(SESSION_BASE_KEYS[key], normalizedRole);
+    localStorage.removeItem(actualKey);
+    sessionStorage.removeItem(actualKey);
   });
 }
 
-const getToken = () => storageGet('woman_token');
+const getToken = () => storageGet('token');
 
 const getUser = () => {
   try {
-    return JSON.parse(storageGet('woman_user'));
+    return JSON.parse(storageGet('user'));
   } catch {
     return null;
   }
 };
 
 const saveSession = (token, user) => {
-  storageSet('woman_token', token);
-  storageSet('woman_user', JSON.stringify(user));
-  storageSet('woman_role', user.role);
+  const role = normalizeStorageRole(user?.role) || getPageRole();
+  if (!role) return;
+
+  storageSet('token', token, role);
+  storageSet('user', JSON.stringify(user), role);
+  storageSet('role', role, role);
 };
 
-function logout() {
-  storageRemoveSession();
+function logout(role = getPageRole()) {
+  storageRemoveSession(role);
   window.location.href = '/login.html';
 }
 
-
-
 function saveUserSession(user) {
-    // I-save ang token kung naa kini sulod sa user object
-    if (user && user.token) {
-        storageSet('woman_token', user.token);
-    }
-    
-    storageSet('woman_user', JSON.stringify(user));
-    storageSet('woman_role', user.role);
+  const role = normalizeStorageRole(user?.role) || getPageRole();
+  if (!role) return;
+
+  if (user && user.token) {
+    storageSet('token', user.token, role);
+  }
+
+  storageSet('user', JSON.stringify(user), role);
+  storageSet('role', role, role);
 }
 
 /* ===========================================================
@@ -84,6 +119,21 @@ async function apiRequest(path, options = {}) {
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 401) {
+      if (path === '/auth/me') {
+        return null;
+      }
+
+      const user = getUser();
+      const normalizedRole = String(user?.role || '').trim().toLowerCase();
+      const allowedRoles = ['admin', 'head', 'client', 'technician'];
+
+      if (allowedRoles.includes(normalizedRole) && normalizedRole !== 'admin') {
+        return {
+          success: false,
+          message: data.message || 'Unauthorized'
+        };
+      }
+
       logout();
       return null;
     }
@@ -263,6 +313,26 @@ async function submitResponse(ticketId, message, internal_note = false, attachme
   });
 }
 
+/* ===========================================================
+   MESSAGES
+=========================================================== */
+async function sendMessage(payload) {
+  return await apiRequest('/messages', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+async function fetchUserMessages(userId) {
+  const res = await apiRequest(`/messages/user/${userId}`);
+  return res?.messages || [];
+}
+
+async function fetchAdminMessageThreads() {
+  const res = await apiRequest('/messages/admin');
+  return res?.threads || [];
+}
+
 async function submitFeedback(ticketId, rating, feedback) {
   return await apiRequest(`/tickets/${ticketId}/feedback`, {
     method: 'POST',
@@ -286,6 +356,11 @@ async function fetchUser(id) {
 
 async function fetchTechnicians() {
   const res = await apiRequest('/users/technicians');
+  return res?.users || [];
+}
+
+async function fetchManagers() {
+  const res = await apiRequest('/users/managers');
   return res?.users || [];
 }
 
@@ -414,7 +489,10 @@ function requireRole(...roles) {
     return false;
   }
 
-  if (!roles.includes(user.role)) {
+  const normalizedRole = String(user.role || '').trim().toLowerCase();
+  const allowedRoles = roles.map((role) => String(role || '').trim().toLowerCase());
+
+  if (!allowedRoles.includes(normalizedRole)) {
     alert('Access denied.');
     history.back();
     return false;

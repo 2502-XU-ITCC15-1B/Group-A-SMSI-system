@@ -5,14 +5,17 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 // GET    /api/logs
 // Roles: admin, head, technician
-// → admin/head: full logs | technician: own activity only
+// → STRICT: users only see logs for tickets they have access to
+// Admin: all logs | Head: department logs | Technician: assigned tickets logs
 // Query: ?ticket_id= & ?limit=
 router.get('/', authenticate, authorize('admin', 'head', 'technician'), async (req, res) => {
   try {
     const filters = {
       limit: req.query.limit ? Number(req.query.limit) : 100,
       ticketId: req.query.ticket_id || null,
-      userId: req.user.role === 'technician' ? req.user.id : null
+      userRole: req.user.role,
+      userId: req.user.id,
+      departmentId: req.user.department_id
     };
 
     const logs = await logService.getAll(filters);

@@ -25,8 +25,9 @@ const record = async ({ ticketId = null, userId, action, details = null }) => {
 };
 
 // ── getAll ───────────────────────────────────────────────
-// Returns system activity logs with optional filters.
-const getAll = async ({ ticketId = null, userId = null, limit = 100 } = {}) => {
+// Returns activity logs scoped by user role and access permissions.
+// ADMIN: all logs | HEAD: only department tickets | TECHNICIAN: only assigned tickets
+const getAll = async ({ ticketId = null, userId = null, limit = 100, userRole = 'technician', departmentId = null } = {}) => {
   let sql = `
     SELECT l.*, u.name AS user_name, u.role AS user_role,
            t.work_order_id
@@ -38,12 +39,29 @@ const getAll = async ({ ticketId = null, userId = null, limit = 100 } = {}) => {
 
   const values = [];
 
+  // Apply role-based access control
+  if (userRole === 'technician') {
+    // Technician sees only logs for tickets assigned to them
+    sql += ` AND (l.ticket_id IS NULL OR l.ticket_id IN (
+      SELECT id FROM tickets WHERE technician_id = ? AND is_deleted = 0
+    ))`;
+    values.push(userId);
+  } else if (userRole === 'head') {
+    // Head sees only logs for tickets in their department
+    sql += ` AND (l.ticket_id IS NULL OR l.ticket_id IN (
+      SELECT id FROM tickets WHERE department_id = ? AND is_deleted = 0
+    ))`;
+    values.push(departmentId);
+  }
+  // Admin sees all logs (no additional filter)
+
   if (ticketId) {
     sql += ' AND l.ticket_id = ?';
     values.push(ticketId);
   }
 
-  if (userId) {
+  if (userRole === 'technician' && userId) {
+    // Technician can additionally filter by userId (their own logs only)
     sql += ' AND l.user_id = ?';
     values.push(userId);
   }

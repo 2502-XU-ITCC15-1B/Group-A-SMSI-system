@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadDashboard() {
-  const tickets = await fetchTickets();
+  const tickets = await fetchMyTickets();
 
   renderSummary(tickets);
   renderRecentTickets(tickets);

@@ -17,6 +17,7 @@ const users = [
     name: 'Administrator',
     email: 'admin@smsi.com',
     password: 'Admin@SMSI2026',
+    phone: '+1-555-0101',
     role: 'admin',
     company_id: null,
     department_id: null
@@ -25,6 +26,7 @@ const users = [
     name: 'Tech Support',
     email: 'tech@smsi.com',
     password: 'Tech@SMSI2026',
+    phone: '+1-555-0102',
     role: 'technician',
     company_id: null,
     department_id: 1
@@ -33,6 +35,7 @@ const users = [
     name: 'Department Head',
     email: 'head@smsi.com',
     password: 'Head@SMSI2026',
+    phone: '+1-555-0103',
     role: 'head',
     company_id: null,
     department_id: 1
@@ -41,6 +44,7 @@ const users = [
     name: 'John Reyes',
     email: 'client@testco.com',
     password: 'Client@2026',
+    phone: '+1-555-0104',
     role: 'client',
     company_id: 1,
     department_id: null
@@ -128,16 +132,17 @@ const logs = [
       const hash = await bcrypt.hash(u.password, SALT_ROUNDS);
 
       await pool.query(
-        `INSERT INTO users (name, email, password_hash, role, company_id, department_id)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO users (name, email, password_hash, role, company_id, department_id, phone)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (email) DO UPDATE SET
            name = EXCLUDED.name,
            password_hash = EXCLUDED.password_hash,
            role = EXCLUDED.role,
            company_id = EXCLUDED.company_id,
            department_id = EXCLUDED.department_id,
+           phone = COALESCE(EXCLUDED.phone, users.phone),
            is_active = 1`,
-        [u.name, u.email, hash, u.role, u.company_id, u.department_id]
+        [u.name, u.email, hash, u.role, u.company_id, u.department_id, u.phone || null]
       );
     }
 

@@ -34,6 +34,20 @@ router.get('/technicians', async (req, res) => {
   }
 });
 
+// GET    /api/users/managers
+// → list only admin-level managers for department assignment
+router.get('/managers', async (req, res) => {
+  try {
+    const users = await userService.getManagers();
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
+
 // GET    /api/users/:id
 // → get single user by ID
 router.get('/:id', async (req, res) => {

@@ -28,6 +28,20 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// POST /api/auth/register
+// Body: { name, email, password, company_id?, department_id? }
+router.post('/register', async (req, res) => {
+  try {
+    const result = await authService.register(req.body);
+    res.status(201).json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message || 'Server error.'
+    });
+  }
+});
+
 // GET /api/auth/me   (requires valid JWT)
 // Returns the currently logged-in user's profile.
 router.get('/me', authenticate, async (req, res) => {
@@ -83,6 +97,13 @@ router.put('/change-password', authenticate, async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
+
+    if (!email || !String(email).includes('@')) {
+      return res.status(400).json({
+        success: false,
+        message: 'A valid email address is required.'
+      });
+    }
 
     const result = await authService.requestPasswordReset(email);
     res.json({ success: true, ...result });

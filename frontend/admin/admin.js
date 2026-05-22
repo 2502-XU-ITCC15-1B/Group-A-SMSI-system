@@ -7,6 +7,8 @@ const AdminPortal = (() => {
     departments: { title: 'Departments', subtitle: 'Maintain operational departments and assign their managers.' },
     reports: { title: 'Reports', subtitle: 'Review ticket metrics, queue composition, and service distribution.' },
     activity: { title: 'Activity Log', subtitle: 'Inspect recent system actions and operator audit history.' },
+    'system-activity': { title: 'System Activity', subtitle: 'System-level events and ticket discussion history.' },
+    messages: { title: 'Inbox', subtitle: 'Review user conversations and reply directly to private messages.' },
     profile: { title: 'Profile', subtitle: 'Update your administrator profile and password.' }
   };
 
@@ -44,12 +46,16 @@ const AdminPortal = (() => {
 
   function buildAttachmentUrl(url) {
     if (!url) return '';
-    const apiBase = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
-    const cleanedBase = apiBase ? apiBase.replace(/\/api\/?$/i, '') : '';
+    const apiBaseCandidate = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || window.LIVE_API || '';
+    const cleanedBase = apiBaseCandidate ? apiBaseCandidate.replace(/\/api\/?$/i, '').replace(/\/$/, '') : '';
 
     try {
       const parsed = new URL(url, window.location.href);
       if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        const isLocalHost = ['localhost', '127.0.0.1'].includes(parsed.hostname);
+        if (isLocalHost && cleanedBase) {
+          return `${cleanedBase}${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
         if (/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(url) || url.startsWith('//')) {
           return parsed.href;
         }
@@ -86,16 +92,172 @@ const AdminPortal = (() => {
 
   function renderAttachmentHtml(url, attachmentType) {
     if (!url) return '';
-    const fullUrl = escapeHtml(buildAttachmentUrl(url));
+    // Build absolute URL by combining configured backend base with the relative path
+    const apiBase = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
+    let backendBase = apiBase ? apiBase.replace(/\/api\/?$/i, '').replace(/\/$/, '') : '';
+    if (!backendBase && window.LIVE_API) {
+      backendBase = window.LIVE_API.replace(/\/api\/?$/i, '');
+    }
+    const fullLink = /^https?:\/\//i.test(url) ? url : `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
+    const fullUrl = escapeHtml(fullLink);
     const fileName = decodeURIComponent(String(url).split('/').pop() || 'attachment');
     const label = '<p class="attachment-label">This response includes a file attachment</p>';
 
     if (attachmentType === 'image' || (attachmentType == null && isImageAttachment(url))) {
-      return `${label}<div class="timeline-attachment-wrap"><img class="timeline-attachment" src="${fullUrl}" alt="${escapeHtml(fileName)}"><p><a class="response-attachment" href="${fullUrl}" target="_blank" rel="noopener">Open image attachment</a></p></div>`;
+      return `${label}<div class="timeline-attachment-wrap"><img class="timeline-attachment" src="${fullUrl}" alt="${escapeHtml(fileName)}"><p><a class="response-attachment" href="${fullUrl}" target="_blank" rel="noopener noreferrer">Open image attachment</a></p></div>`;
     }
 
-    return `${label}<div class="timeline-attachment-wrap"><p><a class="attachment-file-link" href="${fullUrl}" target="_blank" rel="noopener">📎 Download attachment: ${escapeHtml(fileName)}</a></p></div>`;
+    return `${label}<div class="timeline-attachment-wrap"><p><a class="attachment-file-link" href="${fullUrl}" target="_blank" rel="noopener noreferrer">📎 Download attachment: ${escapeHtml(fileName)}</a></p></div>`;
   }
+
+  // Authenticated download helper: fetches using stored Bearer token, converts to blob, and triggers a clean download
+  async function authenticatedDownload(url, suggestedFilename) {
+    try {
+      const token = typeof getToken === 'function' ? getToken() : null;
+      if (!token) {
+        alert('You are not authenticated. Please sign in to download attachments.');
+        return;
+      }
+
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        redirect: 'follow'
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        alert('Unauthorized to access this attachment. Please refresh your session.');
+        return;
+      }
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        console.error('Attachment download failed', res.status, text);
+        alert('Failed to download attachment.');
+        return;
+      }
+
+      const blob = await res.blob();
+
+      let filename = suggestedFilename || '';
+      const cd = res.headers.get('Content-Disposition') || '';
+      const match = cd.match(/filename\*=UTF-8''([^;\n\r]+)|filename="?([^";]+)"?/i);
+      if (!filename && match) {
+        filename = decodeURIComponent(match[1] || match[2] || 'attachment');
+      }
+      if (!filename) {
+        try {
+          const u = new URL(url);
+          filename = decodeURIComponent((u.pathname.split('/').pop() || 'attachment'));
+        } catch (e) {
+          filename = 'attachment';
+        }
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+
+    } catch (err) {
+      console.error('authenticatedDownload error', err);
+      alert('An error occurred while downloading the attachment.');
+    }
+  }
+
+  // Intercept clicks on attachment links and perform authenticated download
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest && e.target.closest('.attachment-file-link');
+    if (!el) return;
+    const href = el.href;
+    if (!href) return;
+    e.preventDefault();
+    const suggested = el.getAttribute('data-filename') || (href.split('/').pop() || 'attachment');
+    authenticatedDownload(href, suggested);
+  });
+
+  // Authenticated image opener for admin attachments
+  async function authenticatedOpenImage(url) {
+    const win = window.open('about:blank');
+    if (!win) {
+      alert('Unable to open attachment in a new window. Please allow popups and try again.');
+      return;
+    }
+    win.document.write('<!DOCTYPE html><html><head><title>Attachment</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;"><p>Loading attachment...</p></body></html>');
+    win.document.close();
+
+    try {
+      const token = typeof getToken === 'function' ? getToken() : null;
+      if (!token) {
+        win.document.body.innerHTML = '<p style="padding:1rem;">You are not authenticated. Please sign in to view attachments.</p>';
+        alert('You are not authenticated. Please sign in to view attachments.');
+        return;
+      }
+
+      const res = await fetch(url, { method: 'GET', headers: { 'Authorization': `Bearer ${token}` }, redirect: 'follow' });
+      if (res.status === 401 || res.status === 403) {
+        win.document.body.innerHTML = '<p style="padding:1rem;">Unauthorized to access this attachment.</p>';
+        alert('Unauthorized to access this attachment.');
+        return;
+      }
+
+      if (!res.ok) {
+        console.error('Image fetch failed', res.status);
+        win.document.body.innerHTML = `<p style="padding:1rem;">Failed to load attachment. (${res.status})</p>`;
+        alert('Failed to load attachment.');
+        return;
+      }
+
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const contentType = (res.headers.get('Content-Type') || '').toLowerCase();
+
+      win.document.body.style.margin = '0';
+      win.document.body.innerHTML = '';
+
+      if (contentType.startsWith('image/')) {
+        const img = win.document.createElement('img');
+        img.src = objectUrl;
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
+        win.document.body.appendChild(img);
+      } else if (contentType.includes('pdf') || contentType === 'application/pdf') {
+        const embed = win.document.createElement('embed');
+        embed.src = objectUrl;
+        embed.type = 'application/pdf';
+        embed.style.width = '100%';
+        embed.style.height = '100vh';
+        win.document.body.appendChild(embed);
+      } else {
+        const obj = win.document.createElement('object');
+        obj.data = objectUrl;
+        obj.type = contentType || 'application/octet-stream';
+        obj.style.width = '100%';
+        obj.style.height = '100vh';
+        win.document.body.appendChild(obj);
+      }
+
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    } catch (err) {
+      console.error('authenticatedOpenImage error', err);
+      if (!win.closed) {
+        win.document.body.innerHTML = '<p style="padding:1rem;">An error occurred while opening the attachment.</p>';
+      }
+      alert('An error occurred while opening the image.');
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest && e.target.closest('.response-attachment');
+    if (!el) return;
+    const href = el.href; if (!href) return; e.preventDefault(); authenticatedOpenImage(href);
+  });
 
   function parseAttachmentFromLog(log) {
     const details = String(log.details || '');
@@ -137,7 +299,10 @@ const AdminPortal = (() => {
     }
 
     const user = await getMe();
-    if (!user || user.role !== 'admin') {
+    const normalizedRole = String(user?.role || '').trim().toLowerCase();
+    const allowedRoles = ['admin'];
+
+    if (!user || !allowedRoles.includes(normalizedRole)) {
       logout();
       return null;
     }
@@ -151,6 +316,7 @@ const AdminPortal = (() => {
     const meta = PAGE_META[pageKey];
     return `
       <div class="app-shell">
+        ${window.SharedNav ? window.SharedNav.getNavHtml('admin', state.user, pageKey) : `
         <aside class="sidebar">
           <div class="brand">
             <img src="/assets/logo.png" alt="SMSi">
@@ -168,6 +334,8 @@ const AdminPortal = (() => {
             ${navLink('departments', 'Departments', 'dept')}
             ${navLink('reports', 'Reports', 'report')}
             ${navLink('activity', 'Activity Log', 'log')}
+            ${navLink('system-activity', 'System Activity', 'log')}
+            ${navLink('messages', 'Inbox', 'mail')}
             ${navLink('profile', 'Profile', 'settings')}
           </nav>
 
@@ -178,7 +346,7 @@ const AdminPortal = (() => {
             <button class="btn secondary sidebar-logout" id="adminLogoutBtn" type="button">${icon('logout')}Logout</button>
           </div>
         </aside>
-
+        `}
         <div class="main">
           <header class="topbar">
             <div class="topbar-meta">
@@ -206,7 +374,8 @@ const AdminPortal = (() => {
 
   function navLink(pageKey, label, iconId) {
     const active = state.page === pageKey ? ' active' : '';
-    return `<a class="nav-item${active}" href="/admin/${pageKey}.html">${icon(iconId)}<span>${escapeHtml(label)}</span></a>`;
+    const href = pageKey === 'activity' ? '/admin/activity-log.html' : `/admin/${pageKey}.html`;
+    return `<a class="nav-item${active}" href="${href}">${icon(iconId)}<span>${escapeHtml(label)}</span></a>`;
   }
 
   function avatarInitials(name) {
@@ -217,10 +386,13 @@ const AdminPortal = (() => {
     state.page = pageKey;
     document.body.innerHTML = layoutShell(pageKey);
     $('adminContent').innerHTML = bodyMarkup;
-    $('adminLogoutBtn').addEventListener('click', (e) => {
-      e.preventDefault();
-      window.logout();
-    });
+    const _adminLogoutBtn = $('adminLogoutBtn') || document.querySelector('.sidebar-logout');
+    if (_adminLogoutBtn) {
+      _adminLogoutBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.logout();
+      });
+    }
   }
 
   function statusBadge(status) {
@@ -382,39 +554,30 @@ const AdminPortal = (() => {
         </div>
       </section>
 
-      <section class="admin-two-column">
-        <section class="card stack">
-          <div class="section-head">
-            <div>
-              <h2 class="section-title">Recent Tickets</h2>
-              <p class="section-subtitle">Latest requests across every company and department.</p>
-            </div>
-            <a class="btn secondary" href="/admin/tickets.html">View Tickets</a>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Work Order</th><th>Title</th><th>Company</th><th>Status</th><th>Priority</th><th>Created</th></tr>
-              </thead>
-              <tbody id="dashboardRecentTickets"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="card stack">
+      <section class="card stack">
+        <div class="section-head">
           <div>
-            <h2 class="section-title">System Activity</h2>
-            <p class="section-subtitle">Most recent administrative and ticket workflow actions.</p>
+            <h2 class="section-title">Recent Tickets</h2>
+            <p class="section-subtitle">Latest requests across every company and department.</p>
           </div>
-          <div id="dashboardActivity" class="responses-list"></div>
-        </section>
+          <a class="btn secondary" href="/admin/tickets.html">View Tickets</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Work Order</th><th>Title</th><th>Company</th><th>Status</th><th>Priority</th><th>Created</th></tr>
+            </thead>
+            <tbody id="dashboardRecentTickets"></tbody>
+          </table>
+        </div>
       </section>
+
+      <!-- System Activity removed from dashboard center; viewable via Activity Log in sidebar -->
     `);
 
-    const [dashboard, tickets, logs, recoveryRequests] = await Promise.all([
+    const [dashboard, tickets, recoveryRequests] = await Promise.all([
       apiRequest('/admin/dashboard'),
       fetchTickets(),
-      fetchLogs({ limit: 8 }),
       fetchPasswordRecoveryRequests().catch(() => [])
     ]);
 
@@ -476,23 +639,7 @@ const AdminPortal = (() => {
       });
     });
 
-    const activityNode = $('dashboardActivity');
-    activityNode.innerHTML = logs.length
-      ? logs.map((log) => {
-          const attachment = parseAttachmentFromLog(log);
-          return `
-            <article class="timeline-item timeline-item-log">
-              <div class="timeline-item-header">
-                <strong>${escapeHtml(log.action || 'Activity')}</strong>
-                <span class="response-meta">${formatRelative(log.created_at)}</span>
-              </div>
-              <div class="response-role">${escapeHtml(log.user_name || 'System')} ${log.work_order_id ? `- ${escapeHtml(log.work_order_id)}` : ''}</div>
-              <p>${escapeHtml(log.details || '')}</p>
-              ${attachment.attachment_url ? renderAttachmentHtml(attachment.attachment_url, attachment.attachment_type) : ''}
-            </article>
-          `;
-        }).join('')
-      : '<div class="empty-state">No recent activity.</div>';
+    // System activity is intentionally not displayed on the dashboard center.
   }
 
   async function openTicketPreviewModal(ticketId) {
@@ -518,7 +665,7 @@ const AdminPortal = (() => {
       $('adminModalSubtitle').textContent = ticket.title || '';
 
       const timeline = [
-        ...logs.map((log) => ({
+        ...(Array.isArray(logs) ? logs.filter((l) => String(l.action || '').toUpperCase() !== 'RESPONSE_ADDED') : []).map((log) => ({
           type: 'log',
           title: log.action || 'Activity',
           actor: log.user_name || 'System',
@@ -1052,7 +1199,16 @@ const AdminPortal = (() => {
           company_id: $('userCompany').value ? Number($('userCompany').value) : null
         };
         const password = $('userPassword').value;
-        if (isCreate) payload.password = password;
+        if (isCreate) {
+          // client-side password strength check
+          const pw = String(password || '');
+          const strong = /^(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/.test(pw);
+          if (!strong) {
+            setInlineMessage($('userModalMessage'), 'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.', 'error');
+            return;
+          }
+          payload.password = password;
+        }
 
         let result;
         if (isCreate) {
@@ -1085,9 +1241,10 @@ const AdminPortal = (() => {
       filterState.page = 1;
       render();
     });
-    $('userRoleFilter').addEventListener('change', (event) => {
+    $('userRoleFilter').addEventListener('change', async (event) => {
       filterState.role = event.target.value;
       filterState.page = 1;
+      state.users = await fetchUsers(filterState.role ? { role: filterState.role } : {});
       render();
     });
     $('userStatusFilter').addEventListener('change', (event) => {
@@ -1277,12 +1434,12 @@ const AdminPortal = (() => {
       </section>
     `);
 
-    const [departments, heads] = await Promise.all([
+    const [departments, managers] = await Promise.all([
       fetchDepartments(),
-      fetchUsers({ role: 'head' })
+      fetchManagers()
     ]);
     state.departments = departments;
-    state.heads = heads;
+    state.managers = managers;
     let query = '';
 
     const render = () => {
@@ -1335,7 +1492,7 @@ const AdminPortal = (() => {
               <label for="departmentManager">Manager</label>
               <select id="departmentManager">
                 <option value="">No manager</option>
-                ${state.heads.map((head) => `<option value="${head.id}" ${String(department?.manager_id || '') === String(head.id) ? 'selected' : ''}>${escapeHtml(head.name)}</option>`).join('')}
+                ${state.managers.map((manager) => `<option value="${manager.id}" ${String(department?.manager_id || '') === String(manager.id) ? 'selected' : ''}>${escapeHtml(manager.name)}</option>`).join('')}
               </select>
             </div>
             <div class="field">
@@ -1445,29 +1602,200 @@ const AdminPortal = (() => {
       : tableEmptyRow(2, 'No department metrics available.');
   }
 
-  async function initActivity() {
-    renderPageShell('activity', `
-      <section class="card stack">
-        <div class="admin-toolbar">
-          <div class="search-input">
-            ${icon('search')}
-            <input id="activitySearch" type="search" placeholder="Search action, user, or work order">
+  async function initMessages() {
+    renderPageShell('messages', `
+      <section class="admin-two-column">
+        <section class="card stack" style="min-width:320px; max-width:380px;">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title">User Conversations</h2>
+              <p class="section-subtitle">Select a user to review the private support thread.</p>
+            </div>
           </div>
-          <select id="activityActionFilter"><option value="">All Actions</option></select>
-        </div>
-        <div id="adminActivityList" class="responses-list"></div>
+          <div class="table-wrap" style="max-height:660px; overflow:auto;">
+            <table>
+              <thead>
+                <tr><th>User</th><th>Role</th><th>Email</th><th>Phone</th><th>Last Message</th><th>Unread</th></tr>
+              </thead>
+              <tbody id="adminMessageThreadsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card stack" id="adminMessageThreadPanel">
+          <div>
+            <h2 class="section-title">Message Preview</h2>
+            <p class="section-subtitle">Choose a user thread to reply directly.</p>
+          </div>
+          <div id="adminMessageThreadContent" class="responses-list"></div>
+          <form id="adminReplyForm" class="stack" style="margin-top:16px;">
+            <div class="field">
+              <label for="adminReplyText">Reply to user</label>
+              <textarea id="adminReplyText" rows="4" required placeholder="Type your reply here..."></textarea>
+            </div>
+            <p id="adminReplyStatus" class="form-msg"></p>
+            <div class="form-actions">
+              <button class="btn" type="submit">Send Reply</button>
+            </div>
+          </form>
+        </section>
       </section>
     `);
 
-    const logs = await fetchLogs({ limit: 200 });
-    const actions = [...new Set(logs.map((log) => log.action).filter(Boolean))].sort();
+    const threads = await fetchAdminMessageThreads();
+    state.messageThreads = threads;
+    state.activeMessageUserId = null;
+
+    const threadSummary = threads.reduce((map, message) => {
+      const isSenderAdmin = message.sender_role === 'admin';
+      const userId = isSenderAdmin ? message.receiver_id : message.sender_id;
+      const userName = isSenderAdmin ? message.receiver_name : message.sender_name;
+      const userEmail = isSenderAdmin ? message.receiver_email : message.sender_email;
+      const userRole = isSenderAdmin ? message.receiver_role : message.sender_role;
+      const userPhone = isSenderAdmin ? message.receiver_phone : message.sender_phone;
+      const lastMessage = message.message;
+      const lastAt = message.created_at;
+      const unreadCount = !isSenderAdmin && !message.is_read ? 1 : 0;
+
+      if (!map[userId]) {
+        map[userId] = {
+          user_id: userId,
+          user_name: userName,
+          user_email: userEmail,
+          user_role: userRole,
+          user_phone: userPhone,
+          last_message: lastMessage,
+          last_at: lastAt,
+          unread_count: unreadCount
+        };
+      } else {
+        map[userId].unread_count += unreadCount;
+        if (new Date(message.created_at) > new Date(map[userId].last_at)) {
+          map[userId].last_message = lastMessage;
+          map[userId].last_at = message.created_at;
+        }
+      }
+
+      return map;
+    }, {});
+
+    const rows = Object.values(threadSummary).sort((a, b) => new Date(b.last_at) - new Date(a.last_at));
+    const tableBody = $('adminMessageThreadsBody');
+    tableBody.innerHTML = rows.length
+      ? rows.map((thread) => `
+          <tr class="table-row-link" data-client-id="${thread.user_id}">
+            <td>${escapeHtml(thread.user_name)}</td>
+            <td>${escapeHtml(thread.user_role)}</td>
+            <td>${escapeHtml(thread.user_email)}</td>
+            <td>${escapeHtml(thread.user_phone || '-')}</td>
+            <td>${escapeHtml(thread.last_message || '-')}</td>
+            <td>${thread.unread_count > 0 ? `<strong>${thread.unread_count}</strong>` : '-'}</td>
+          </tr>
+        `).join('')
+      : tableEmptyRow(6, 'No private messages available.');
+
+    tableBody.querySelectorAll('[data-client-id]').forEach((row) => {
+      row.addEventListener('click', () => loadAdminThread(Number(row.dataset.clientId)));
+    });
+
+    document.getElementById('adminReplyForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const userId = state.activeMessageUserId;
+      const textarea = document.getElementById('adminReplyText');
+      const statusNode = document.getElementById('adminReplyStatus');
+
+      if (!userId) {
+        statusNode.textContent = 'Please select a conversation first.';
+        return;
+      }
+
+      const value = textarea.value.trim();
+      if (!value) {
+        statusNode.textContent = 'Reply cannot be empty.';
+        return;
+      }
+
+      statusNode.textContent = 'Sending reply...';
+      const result = await sendMessage({ receiver_id: userId, message: value });
+
+      if (!result?.success) {
+        statusNode.textContent = result?.message || 'Unable to send reply.';
+        textarea.focus();
+        return;
+      }
+
+      textarea.value = '';
+      statusNode.textContent = 'Reply sent successfully.';
+      await loadAdminThread(userId);
+    });
+
+    async function loadAdminThread(userId) {
+      state.activeMessageUserId = userId;
+      const messages = await fetchUserMessages(userId);
+      const panel = $('adminMessageThreadContent');
+
+      panel.innerHTML = messages.length
+        ? messages.map((msg) => `
+            <article class="timeline-item timeline-item-${msg.sender_role === 'admin' ? 'internal' : 'response'}">
+              <div class="timeline-item-header">
+                <strong>${escapeHtml(msg.sender_role === 'admin' ? 'Admin' : msg.sender_name)}</strong>
+                <span class="response-meta">${formatDateTimeLocal(msg.created_at)}</span>
+              </div>
+              <p>${escapeHtml(msg.message)}</p>
+            </article>
+          `).join('')
+        : '<div class="empty-state">No conversation history yet.</div>';
+    }
+  }
+
+  async function initActivity() {
+    renderPageShell('activity', `
+      <section class="admin-two-column">
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">System Activity</h2>
+            <p class="section-subtitle">Most recent administrative and ticket workflow actions.</p>
+          </div>
+          <div class="admin-toolbar">
+            <div class="search-input">
+              ${icon('search')}
+              <input id="activitySearch" type="search" placeholder="Search action, user, or work order">
+            </div>
+            <select id="activityActionFilter"><option value="">All Actions</option></select>
+          </div>
+          <div id="adminActivityList" class="responses-list"></div>
+        </section>
+
+        <section class="card stack">
+          <div>
+            <h2 class="section-title">Ticket Comments</h2>
+            <p class="section-subtitle">Recent ticket responses and discussions.</p>
+          </div>
+          <div class="admin-toolbar">
+            <div class="search-input">
+              ${icon('search')}
+              <input id="commentsSearch" type="search" placeholder="Search comments or work order">
+            </div>
+          </div>
+          <div id="adminCommentsList" class="responses-list"></div>
+        </section>
+      </section>
+    `);
+
+    const [logs, tickets] = await Promise.all([
+      fetchLogs({ limit: 200 }).catch(() => []),
+      fetchTickets().catch(() => [])
+    ]);
+
+    const visibleLogs = Array.isArray(logs) ? logs.filter((log) => String(log.action || '').toUpperCase() !== 'RESPONSE_ADDED') : [];
+    const actions = [...new Set(visibleLogs.map((log) => log.action).filter(Boolean))].sort();
     $('activityActionFilter').innerHTML += actions.map((action) => `<option value="${escapeHtml(action)}">${escapeHtml(action)}</option>`).join('');
 
     let search = '';
     let actionFilter = '';
 
-    const render = () => {
-      const filtered = logs.filter((log) => {
+    const renderActivity = () => {
+      const filtered = visibleLogs.filter((log) => {
         const text = `${log.action || ''} ${log.details || ''} ${log.user_name || ''} ${log.work_order_id || ''}`.toLowerCase();
         return (!search || text.includes(search)) && (!actionFilter || log.action === actionFilter);
       });
@@ -1486,19 +1814,182 @@ const AdminPortal = (() => {
           </article>
         `;
       }).join('') : '<div class="empty-state">No activity matched the current filters.</div>';
-
     };
 
     $('activitySearch').addEventListener('input', (event) => {
       search = event.target.value.trim().toLowerCase();
-      render();
+      renderActivity();
     });
     $('activityActionFilter').addEventListener('change', (event) => {
       actionFilter = event.target.value;
-      render();
+      renderActivity();
     });
 
-    render();
+    renderActivity();
+
+    // ----- Ticket Comments (recent responses across tickets) -----
+    const sampleTickets = Array.isArray(tickets) ? tickets.slice(0, 50) : [];
+    const responsesArrays = await Promise.all(sampleTickets.map((t) => fetchResponses(t.id).catch(() => [])));
+    const comments = [];
+    sampleTickets.forEach((t, idx) => {
+      (responsesArrays[idx] || []).forEach((r) => {
+        if (!r.internal_note) {
+          comments.push({ ticket: t, response: r });
+        }
+      });
+    });
+
+    comments.sort((a, b) => new Date(b.response.created_at) - new Date(a.response.created_at));
+    const commentsNode = $('adminCommentsList');
+    commentsNode.innerHTML = comments.length ? comments.map((c) => `
+      <article class="timeline-item timeline-item-response">
+        <div class="timeline-item-header">
+          <strong>Comment on ${escapeHtml(c.ticket.work_order_id || '')}</strong>
+          <span class="response-meta">${formatDateTimeLocal(c.response.created_at)}</span>
+        </div>
+        <div class="response-role">${escapeHtml(c.response.author_name || c.response.user_name || 'Unknown')} - ${escapeHtml(c.ticket.title || '')}</div>
+        <p>${escapeHtml(c.response.message || '')}</p>
+        <div class="response-actions"><button class="btn secondary" data-open-ticket="${c.ticket.id}">Open Ticket</button></div>
+      </article>
+    `).join('') : '<div class="empty-state">No recent ticket comments.</div>';
+
+    commentsNode.querySelectorAll('[data-open-ticket]').forEach((btn) => {
+      btn.addEventListener('click', () => openTicketPreviewModal(btn.dataset.openTicket));
+    });
+
+    // comments search
+    const commentsSearchEl = $('commentsSearch');
+    commentsSearchEl.addEventListener('input', (e) => {
+      const q = String(e.target.value || '').trim().toLowerCase();
+      const filtered = comments.filter((c) => {
+        const text = `${c.response.message || ''} ${c.response.author_name || ''} ${c.ticket.work_order_id || ''} ${c.ticket.title || ''}`.toLowerCase();
+        return !q || text.includes(q);
+      });
+      commentsNode.innerHTML = filtered.length ? filtered.map((c) => `
+        <article class="timeline-item timeline-item-response">
+          <div class="timeline-item-header">
+            <strong>Comment on ${escapeHtml(c.ticket.work_order_id || '')}</strong>
+            <span class="response-meta">${formatDateTimeLocal(c.response.created_at)}</span>
+          </div>
+          <div class="response-role">${escapeHtml(c.response.author_name || c.response.user_name || 'Unknown')} - ${escapeHtml(c.ticket.title || '')}</div>
+          <p>${escapeHtml(c.response.message || '')}</p>
+          <div class="response-actions"><button class="btn secondary" data-open-ticket="${c.ticket.id}">Open Ticket</button></div>
+        </article>
+      `).join('') : '<div class="empty-state">No recent ticket comments.</div>';
+
+      commentsNode.querySelectorAll('[data-open-ticket]').forEach((btn) => {
+        btn.addEventListener('click', () => openTicketPreviewModal(btn.dataset.openTicket));
+      });
+    });
+  }
+
+  async function initSystemActivity() {
+    renderPageShell('system-activity', `
+      <section class="card stack">
+        <div>
+          <h2 class="section-title">System Activity</h2>
+          <p class="section-subtitle">Most recent administrative and ticket workflow actions.</p>
+        </div>
+        <div class="admin-toolbar">
+          <div class="search-input">
+            ${icon('search')}
+            <input id="sysActivitySearch" type="search" placeholder="Search action, user, or work order">
+          </div>
+          <select id="sysActivityActionFilter"><option value="">All Actions</option></select>
+        </div>
+        <div id="sysActivityList" class="responses-list"></div>
+      </section>
+
+      <section class="card stack">
+        <div>
+          <h2 class="section-title">Ticket Comments</h2>
+          <p class="section-subtitle">Recent ticket responses and discussions.</p>
+        </div>
+        <div class="admin-toolbar">
+          <div class="search-input">
+            ${icon('search')}
+            <input id="sysCommentsSearch" type="search" placeholder="Search comments or work order">
+          </div>
+        </div>
+        <div id="sysCommentsList" class="responses-list"></div>
+      </section>
+    `);
+
+    const [logs, tickets] = await Promise.all([
+      fetchLogs({ limit: 500 }).catch(() => []),
+      fetchTickets().catch(() => [])
+    ]);
+
+    const visibleLogs = Array.isArray(logs) ? logs.filter((l) => String(l.action || '').toUpperCase() !== 'RESPONSE_ADDED') : [];
+    const actions = [...new Set(visibleLogs.map((log) => log.action).filter(Boolean))].sort();
+    $('sysActivityActionFilter').innerHTML += actions.map((action) => `<option value="${escapeHtml(action)}">${escapeHtml(action)}</option>`).join('');
+
+    let search = '';
+    let actionFilter = '';
+
+    const renderSysActivity = () => {
+      const filtered = visibleLogs.filter((log) => {
+        const text = `${log.action || ''} ${log.details || ''} ${log.user_name || ''} ${log.work_order_id || ''}`.toLowerCase();
+        return (!search || text.includes(search)) && (!actionFilter || log.action === actionFilter);
+      });
+      const node = $('sysActivityList');
+      node.innerHTML = filtered.length ? filtered.map((log) => {
+        const attachment = parseAttachmentFromLog(log);
+        return `
+          <article class="timeline-item timeline-item-log">
+            <div class="timeline-item-header">
+              <strong>${escapeHtml(log.action || 'Activity')}</strong>
+              <span class="response-meta">${formatDateTimeLocal(log.created_at)}</span>
+            </div>
+            <div class="response-role">${escapeHtml(log.user_name || 'System')} ${log.work_order_id ? `- ${escapeHtml(log.work_order_id)}` : ''}</div>
+            <p>${escapeHtml(log.details || '')}</p>
+            ${attachment.attachment_url ? renderAttachmentHtml(attachment.attachment_url, attachment.attachment_type) : ''}
+          </article>
+        `;
+      }).join('') : '<div class="empty-state">No activity matched the current filters.</div>';
+    };
+
+    $('sysActivitySearch').addEventListener('input', (e) => { search = e.target.value.trim().toLowerCase(); renderSysActivity(); });
+    $('sysActivityActionFilter').addEventListener('change', (e) => { actionFilter = e.target.value; renderSysActivity(); });
+    renderSysActivity();
+
+    // Comments
+    const sampleTickets = Array.isArray(tickets) ? tickets.slice(0, 100) : [];
+    const responsesArrays = await Promise.all(sampleTickets.map((t) => fetchResponses(t.id).catch(() => [])));
+    const comments = [];
+    sampleTickets.forEach((t, idx) => {
+      (responsesArrays[idx] || []).forEach((r) => {
+        if (!r.internal_note) comments.push({ ticket: t, response: r });
+      });
+    });
+    comments.sort((a, b) => new Date(b.response.created_at) - new Date(a.response.created_at));
+    const commentsNode = $('sysCommentsList');
+    commentsNode.innerHTML = comments.length ? comments.map((c) => `
+      <article class="timeline-item timeline-item-response">
+        <div class="timeline-item-header"><strong>Comment on ${escapeHtml(c.ticket.work_order_id || '')}</strong><span class="response-meta">${formatDateTimeLocal(c.response.created_at)}</span></div>
+        <div class="response-role">${escapeHtml(c.response.author_name || c.response.user_name || 'Unknown')} - ${escapeHtml(c.ticket.title || '')}</div>
+        <p>${escapeHtml(c.response.message || '')}</p>
+        <div class="response-actions"><button class="btn secondary" data-open-ticket="${c.ticket.id}">Open Ticket</button></div>
+      </article>
+    `).join('') : '<div class="empty-state">No recent ticket comments.</div>';
+    commentsNode.querySelectorAll('[data-open-ticket]').forEach((btn) => btn.addEventListener('click', () => openTicketPreviewModal(btn.dataset.openTicket)));
+
+    $('sysCommentsSearch').addEventListener('input', (e) => {
+      const q = String(e.target.value || '').trim().toLowerCase();
+      const filtered = comments.filter((c) => {
+        const text = `${c.response.message || ''} ${c.response.author_name || ''} ${c.ticket.work_order_id || ''} ${c.ticket.title || ''}`.toLowerCase();
+        return !q || text.includes(q);
+      });
+      commentsNode.innerHTML = filtered.length ? filtered.map((c) => `
+        <article class="timeline-item timeline-item-response">
+          <div class="timeline-item-header"><strong>Comment on ${escapeHtml(c.ticket.work_order_id || '')}</strong><span class="response-meta">${formatDateTimeLocal(c.response.created_at)}</span></div>
+          <div class="response-role">${escapeHtml(c.response.author_name || c.response.user_name || 'Unknown')} - ${escapeHtml(c.ticket.title || '')}</div>
+          <p>${escapeHtml(c.response.message || '')}</p>
+          <div class="response-actions"><button class="btn secondary" data-open-ticket="${c.ticket.id}">Open Ticket</button></div>
+        </article>
+      `).join('') : '<div class="empty-state">No recent ticket comments.</div>';
+      commentsNode.querySelectorAll('[data-open-ticket]').forEach((btn) => btn.addEventListener('click', () => openTicketPreviewModal(btn.dataset.openTicket)));
+    });
   }
 
   async function initProfile() {
@@ -1553,9 +2044,16 @@ const AdminPortal = (() => {
 
     $('adminPasswordForm').addEventListener('submit', async (event) => {
       event.preventDefault();
+      const newPw = String($('adminNewPassword').value || '');
+      const strong = /^(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/.test(newPw);
+      if (!strong) {
+        setInlineMessage($('adminPasswordMessage'), 'New password must be at least 8 characters and include an uppercase letter, a number, and a special character.', 'error');
+        return;
+      }
+
       const result = await changePassword({
         current_password: $('adminCurrentPassword').value,
-        new_password: $('adminNewPassword').value
+        new_password: newPw
       });
       if (result?.success) {
         $('adminPasswordForm').reset();
@@ -1574,6 +2072,8 @@ const AdminPortal = (() => {
     departments: initDepartments,
     reports: initReports,
     activity: initActivity,
+    'system-activity': initSystemActivity,
+    messages: initMessages,
     profile: initProfile
   };
 

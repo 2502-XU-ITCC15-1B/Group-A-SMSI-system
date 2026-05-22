@@ -10,9 +10,11 @@ const jwt     = require('jsonwebtoken');
 
 const pool       = require('../config/db');
 const logService = require('./log.service');
+const mailService = require('./mail.service');
 
 const JWT_SECRET  = process.env.JWT_SECRET  || 'woman_dev_secret_change_in_prod';
 const JWT_EXPIRES = process.env.JWT_EXPIRES || '8h';   // token lifetime
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5000';
 
 // ── login ────────────────────────────────────────────────
 // Verifies credentials and returns a signed JWT + user info.
@@ -64,7 +66,7 @@ const login = async (email, password) => {
 // Returns fresh user data for the authenticated user.
 const getMe = async (userId) => {
   const [rows] = await pool.query(
-    `SELECT u.id, u.name, u.email, u.role, u.company_id, u.department_id, u.created_at, u.is_active,
+    `SELECT u.id, u.name, u.email, u.role, u.company_id, u.department_id, u.profile_picture, u.created_at, u.is_active,
             c.name AS company_name,
             d.name AS department_name
      FROM users u
@@ -163,15 +165,68 @@ const changePassword = async (userId, currentPassword, newPassword) => {
 
 // ── requestPasswordReset ─────────────────────────────────
 // Generates a reset token and stores it with expiration.
-const requestPasswordReset = async (email) => {
-  const [rows] = await pool.query(
-    'SELECT id, name, email FROM users WHERE email = $1 AND is_active = 1 LIMIT 1',
-    [email]
+const register = async ({ name, email, password, company_id = null, department_id = null }) => {
+  const normalizedName = (name || '').trim();
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  const normalizedPassword = password || '';
+
+  if (!normalizedName || !normalizedEmail || !normalizedPassword) {
+    throw { status: 400, message: 'Name, email, and password are required.' };
+  }
+
+  const [existing] = await pool.query(
+    'SELECT id FROM users WHERE email = $1 LIMIT 1',
+    [normalizedEmail]
   );
 
-  // Always return success message to prevent email enumeration
+  if (existing.length > 0) {
+    throw { status: 409, message: 'A user with that email already exists.' };
+  }
+
+  const password_hash = await bcrypt.hash(normalizedPassword, SALT_ROUNDS);
+
+  const [result] = await pool.query(
+    `INSERT INTO users
+       (name, email, password_hash, role, company_id, department_id, is_active)
+     VALUES ($1, $2, $3, 'client', $4, $5, 1)
+     RETURNING id, name, email, role, company_id, department_id`,
+    [normalizedName, normalizedEmail, password_hash, company_id || null, department_id || null]
+  );
+
+  const user = result[0];
+  const payload = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    company_id: user.company_id,
+    department_id: user.department_id
+  };
+
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+
+  await logService.record({
+    userId: user.id,
+    action: 'USER_REGISTERED',
+    details: `New account created for ${user.email}`
+  });
+
+  return { token, user: payload };
+};
+
+const requestPasswordReset = async (email) => {
+  if (!email || !String(email).includes('@')) {
+    throw { status: 400, message: 'A valid email address is required.' };
+  }
+
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const [rows] = await pool.query(
+    'SELECT id, name, email FROM users WHERE email = $1 AND is_active = 1 LIMIT 1',
+    [normalizedEmail]
+  );
+
   if (rows.length === 0) {
-    return { message: 'If the email exists, a reset link was generated.' };
+    throw { status: 400, message: 'Email does not exist' };
   }
 
   const user = rows[0];
@@ -186,6 +241,15 @@ const requestPasswordReset = async (email) => {
     [user.id, token, expiresAt]
   );
 
+  const resetUrl = `${FRONTEND_URL.replace(/\/$/, '')}/reset-confirmation.html?token=${token}`;
+
+  await mailService.sendMail({
+    to: user.email,
+    subject: 'SMSi Password Reset Instructions',
+    text: `Hello ${user.name},\n\nWe received a request to reset your SMSi password. Please open the link below and set a new password:\n\n${resetUrl}\n\nIf you did not request this, you can safely ignore this email.\n\nThank you.`,
+    html: `<p>Hello ${user.name},</p><p>We received a request to reset your SMSi password. Please click the link below and set a new password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you did not request this, you can safely ignore this email.</p><p>Thank you.</p>`
+  });
+
   // Log request
   await logService.record({
     userId:  user.id,
@@ -194,8 +258,7 @@ const requestPasswordReset = async (email) => {
   });
 
   return {
-    message: 'Password reset link generated.',
-    reset_token: token
+    message: 'Password reset instructions have been emailed if the account exists.'
   };
 };
 
@@ -251,6 +314,7 @@ const resetPassword = async (token, newPassword) => {
 
 module.exports = {
   login,
+  register,
   getMe,
   updateMe,
   changePassword,

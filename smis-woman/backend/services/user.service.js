@@ -9,15 +9,22 @@ const pool       = require('../config/db');
 const logService = require('./log.service');
 
 const SALT_ROUNDS = 10;
+const VALID_USER_ROLES = ['admin', 'head', 'technician', 'client'];
+const normalizeRoleFilter = (role) => {
+  const candidate = String(role || '').trim().toLowerCase();
+  if (!candidate) return null;
+  if (candidate === 'manager') return 'admin';
+  return VALID_USER_ROLES.includes(candidate) ? candidate : null;
+};
 
 // ── getAll ───────────────────────────────────────────────
 // Returns list of users with optional filters (role, company)
 const getAll = async (filters = {}) => {
   let query = `
-    SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at,
-           u.company_id, u.department_id,
-           c.name AS company_name,
-           d.name AS department_name
+        SELECT u.id, u.name, u.email, u.phone, u.role, u.is_active, u.created_at,
+          u.company_id, u.department_id,
+          c.name AS company_name,
+          d.name AS department_name
     FROM users u
     LEFT JOIN companies c ON c.id = u.company_id
     LEFT JOIN departments d ON d.id = u.department_id
@@ -28,8 +35,12 @@ const getAll = async (filters = {}) => {
   let paramIndex = 1;
 
   if (filters.role) {
-    query += ` AND u.role = $${paramIndex++}`;
-    vals.push(filters.role);
+    const roleFilter = normalizeRoleFilter(filters.role);
+    if (!roleFilter) {
+      throw { status: 400, message: 'Invalid role filter provided.' };
+    }
+    query += ` AND LOWER(u.role) = $${paramIndex++}`;
+    vals.push(roleFilter);
   }
 
   if (filters.company_id) {
@@ -57,10 +68,10 @@ const getAll = async (filters = {}) => {
 // Returns a single user by ID
 const getById = async (id) => {
   const [rows] = await pool.query(
-    `SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at,
-            u.company_id, u.department_id,
-            c.name AS company_name,
-            d.name AS department_name
+        `SELECT u.id, u.name, u.email, u.phone, u.role, u.is_active, u.created_at,
+          u.company_id, u.department_id,
+          c.name AS company_name,
+          d.name AS department_name
      FROM users u
      LEFT JOIN companies c ON c.id = u.company_id
      LEFT JOIN departments d ON d.id = u.department_id
@@ -95,6 +106,20 @@ const getTechnicians = async () => {
   return rows;
 };
 
+// ── getManagers ───────────────────────────────────────────
+// Returns active administrator/manager users for department assignment
+const getManagers = async () => {
+  const [rows] = await pool.query(
+    `SELECT id, name
+     FROM users
+     WHERE LOWER(role) IN ('admin', 'manager')
+       AND is_active = 1
+     ORDER BY name ASC`
+  );
+
+  return rows;
+};
+
 // ── create ───────────────────────────────────────────────
 // Creates a new user (admin action)
 const create = async ({ name, email, password, role, company_id, department_id }, adminId) => {
@@ -123,13 +148,14 @@ const create = async ({ name, email, password, role, company_id, department_id }
   await logService.record({
     userId: adminId,
     action: 'USER_CREATED',
-    details: `User "${email}" created.`
+    details: `New account created for ${email}`
   });
 
   return {
     id: result.id,
     name,
     email,
+    phone: null,
     role,
     company_id: company_id || null,
     department_id: department_id || null
@@ -235,6 +261,7 @@ module.exports = {
   getAll,
   getById,
   getTechnicians,
+  getManagers,
   create,
   update,
   setStatus,

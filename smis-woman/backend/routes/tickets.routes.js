@@ -44,9 +44,9 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // GET    /api/tickets/mine
-// Roles: technician
-// → get tickets assigned to current technician
-router.get('/mine', authenticate, authorize('technician'), async (req, res) => {
+// Roles: technician, client
+// → get tickets assigned to current technician or created by current client
+router.get('/mine', authenticate, authorize('technician', 'client'), async (req, res) => {
   try {
     const tickets = await ticketService.getMine(req.user);
     res.json({ success: true, tickets });
@@ -80,11 +80,9 @@ router.get('/:id/responses', authenticate, async (req, res) => {
     const normalized = (responses || []).map((r) => {
       const orig = r || {};
       let attachmentUrl = orig.attachment_url || orig.attachment || orig.file_path || null;
-      if (attachmentUrl) {
-        if (!/^https?:\/\//i.test(attachmentUrl)) {
-          const base = `${req.protocol}://${req.get('host')}`;
-          attachmentUrl = attachmentUrl.startsWith('/') ? `${base}${attachmentUrl}` : `${base}/${attachmentUrl}`;
-        }
+      // Keep relative paths as-is (ensure leading slash). If an absolute URL is stored, leave it.
+      if (attachmentUrl && !/^https?:\/\//i.test(attachmentUrl)) {
+        attachmentUrl = attachmentUrl.startsWith('/') ? attachmentUrl : `/${attachmentUrl}`;
       }
       return {
         ...orig,
@@ -246,8 +244,7 @@ router.post('/:id/responses', authenticate, authorize('admin', 'head', 'technici
       const r = result.response;
       let attachmentUrl = r.attachment_url || r.attachment || r.file_path || null;
       if (attachmentUrl && !/^https?:\/\//i.test(attachmentUrl)) {
-        const base = `${req.protocol}://${req.get('host')}`;
-        attachmentUrl = attachmentUrl.startsWith('/') ? `${base}${attachmentUrl}` : `${base}/${attachmentUrl}`;
+        attachmentUrl = attachmentUrl.startsWith('/') ? attachmentUrl : `/${attachmentUrl}`;
       }
       result.response.attachment_url = attachmentUrl;
       result.response.attachment_type = r.attachment_type || (attachmentUrl ? getAttachmentType(attachmentUrl) : null);

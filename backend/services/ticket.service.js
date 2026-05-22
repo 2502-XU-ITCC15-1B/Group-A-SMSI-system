@@ -38,14 +38,14 @@ const getAll = async (user, filters = {}) => {
   const values = [];
 
   if (user.role === 'client') {
-    sql += ' AND t.company_id = ?';
-    values.push(user.company_id);
+    sql += ' AND t.requestor_id = ?';
+    values.push(user.id);
   } else if (user.role === 'technician') {
     sql += ' AND t.technician_id = ?';
     values.push(user.id);
   } else if (user.role === 'head') {
-    sql += ' AND (t.department_id = ? OR t.department_id IS NULL)';
-    values.push(user.department_id || null);
+    sql += ' AND t.department_id = ?';
+    values.push(user.department_id);
   }
 
   if (filters.status) {
@@ -93,7 +93,7 @@ const getById = async (id, user) => {
 
   const ticket = rows[0];
 
-  if (user.role === 'client' && ticket.company_id !== user.company_id) {
+  if (user.role === 'client' && ticket.requestor_id !== user.id) {
     throw { status: 403, message: 'Access denied.' };
   }
 
@@ -101,8 +101,10 @@ const getById = async (id, user) => {
     throw { status: 403, message: 'Access denied.' };
   }
 
-  if (user.role === 'head' && user.department_id && ticket.department_id !== user.department_id && ticket.department_id !== null) {
-    throw { status: 403, message: 'Access denied.' };
+  if (user.role === 'head') {
+    if (!user.department_id || ticket.department_id !== user.department_id) {
+      throw { status: 403, message: 'Access denied.' };
+    }
   }
 
   return ticket;

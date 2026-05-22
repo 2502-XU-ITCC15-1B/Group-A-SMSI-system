@@ -7,6 +7,17 @@ const fs       = require('fs');
  
 // ── DB pool (import triggers the connection health check) ──
 require('./config/db');
+const { applyMigrations } = require('./scripts/run_migrations');
+
+// Apply database migrations automatically on startup.
+(async () => {
+  try {
+    await applyMigrations();
+  } catch (err) {
+    console.error('Failed to apply migrations:', err.message || err);
+    process.exit(1);
+  }
+})();
  
 // ── Route modules ──────────────────────────────────────────
 const authRoutes       = require('./routes/auth.routes');
@@ -18,6 +29,7 @@ const logRoutes        = require('./routes/logs.routes');
 const profileRoutes    = require('./routes/profile.routes');
 const adminRoutes      = require('./routes/admin.routes');
 const passwordRecoveryRoutes = require('./routes/password-recovery.routes');
+const messagesRoutes   = require('./routes/messages.routes');
 const { authenticate, authorize } = require('./middleware/auth');
 const ticketService = require('./services/ticket.service');
  
@@ -70,6 +82,7 @@ app.use('/api/companies',   companyRoutes);
 app.use('/api/departments', departmentRoutes); 
 app.use('/api/logs',        logRoutes);
 app.use('/api/profile',     profileRoutes);
+app.use('/api/messages',    messagesRoutes);
 // Ensure password-recovery routes are mounted before the admin router so
 // requests to `/api/admin/password-recovery-requests` are handled by the
 // dedicated password-recovery router instead of being captured (and 404'd)

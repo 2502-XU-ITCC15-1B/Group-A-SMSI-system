@@ -34,6 +34,20 @@ router.get('/technicians', async (req, res) => {
   }
 });
 
+// GET    /api/users/managers
+// → list only admin-level managers for department assignment
+router.get('/managers', async (req, res) => {
+  try {
+    const users = await userService.getManagers();
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
+
 // GET    /api/users/:id
 // → get single user by ID
 router.get('/:id', async (req, res) => {
@@ -115,10 +129,13 @@ router.patch('/:id/password', async (req, res) => {
   try {
     const { password } = req.body;
 
-    if (!password || password.length < 8) {
+    // server-side validation: minimum 8 chars, at least one uppercase, one number, one special char
+    const pw = String(password || '');
+    const strong = /^(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/.test(pw);
+    if (!strong) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 8 characters.'
+        message: 'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.'
       });
     }
 

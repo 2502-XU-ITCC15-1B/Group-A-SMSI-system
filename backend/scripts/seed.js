@@ -17,6 +17,7 @@ const users = [
     name: 'Administrator',
     email: 'admin@smsi.com',
     password: 'Admin@SMSI2026',
+    phone: '+1-555-0101',
     role: 'admin',
     company_id: null,
     department_id: null
@@ -25,6 +26,7 @@ const users = [
     name: 'Tech Support',
     email: 'tech@smsi.com',
     password: 'Tech@SMSI2026',
+    phone: '+1-555-0102',
     role: 'technician',
     company_id: null,
     department_id: 1
@@ -33,6 +35,7 @@ const users = [
     name: 'Department Head',
     email: 'head@smsi.com',
     password: 'Head@SMSI2026',
+    phone: '+1-555-0103',
     role: 'head',
     company_id: null,
     department_id: 1
@@ -41,6 +44,7 @@ const users = [
     name: 'HR Head',
     email: 'head-hr@smsi.com',
     password: 'HeadHR@2026',
+    phone: '+1-555-0104',
     role: 'head',
     company_id: null,
     department_id: 2
@@ -49,6 +53,7 @@ const users = [
     name: 'Facilities Head',
     email: 'head-fac@smsi.com',
     password: 'HeadFAC@2026',
+    phone: '+1-555-0105',
     role: 'head',
     company_id: null,
     department_id: 3
@@ -57,6 +62,7 @@ const users = [
     name: 'Finance Head',
     email: 'head-fin@smsi.com',
     password: 'HeadFIN@2026',
+    phone: '+1-555-0106',
     role: 'head',
     company_id: null,
     department_id: 4
@@ -65,6 +71,7 @@ const users = [
     name: 'John Reyes',
     email: 'client@testco.com',
     password: 'Client@2026',
+    phone: '+1-555-0107',
     role: 'client',
     company_id: 1,
     department_id: null

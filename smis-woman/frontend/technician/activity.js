@@ -48,6 +48,8 @@ async function loadActivityPage() {
         ]);
 
         logs.forEach((log) => {
+          // Skip internal system logs that only track response IDs
+          if (String(log.action || '').toUpperCase() === 'RESPONSE_ADDED') return;
           items.push({
             type: 'log',
             title: log.action || 'System activity',

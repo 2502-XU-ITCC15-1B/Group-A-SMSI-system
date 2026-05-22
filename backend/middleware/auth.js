@@ -19,6 +19,7 @@
 // -------------------------------------------------------
 
 const jwt = require('jsonwebtoken');
+const pool = require('../config/db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'woman_dev_secret_change_in_prod';
 
@@ -26,7 +27,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'woman_dev_secret_change_in_prod';
 // Reads the Bearer token from the Authorization header,
 // verifies its signature, and stores the decoded payload
 // on req.user for downstream handlers.
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -37,7 +38,35 @@ const authenticate = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;   // { id, name, email, role, company_id }
+
+    // Refresh user status from DB on every request to enforce immediate account disable
+    const [rows] = await pool.query(
+      `SELECT id, name, email, role, company_id, department_id, is_active
+       FROM users WHERE id = ? LIMIT 1`,
+      [decoded.id]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(401).json({ success: false, message: 'User not found.' });
+    }
+
+    const user = rows[0];
+
+    if (!user.is_active) {
+      // Immediate kick-out for disabled accounts
+      return res.status(403).json({ success: false, message: 'Account disabled. Please contact administrator.' });
+    }
+
+    // Attach DB-backed user object (avoid exposing password_hash)
+    req.user = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      company_id: user.company_id,
+      department_id: user.department_id
+    };
+
     next();
   } catch (err) {
     const message = err.name === 'TokenExpiredError'

@@ -10,6 +10,20 @@ const logService = require('./log.service');
 
 const SALT_ROUNDS = 10;
 
+function isStrongPassword(pw) {
+  if (!pw || typeof pw !== 'string') return false;
+  // Minimum 8 characters, at least one uppercase letter, one number, and one special character
+  return /^(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/.test(pw);
+}
+
+const VALID_USER_ROLES = ['admin', 'head', 'technician', 'client'];
+const normalizeRoleFilter = (role) => {
+  const candidate = String(role || '').trim().toLowerCase();
+  if (!candidate) return null;
+  if (candidate === 'manager') return 'admin';
+  return VALID_USER_ROLES.includes(candidate) ? candidate : null;
+};
+
 // ── getAll ───────────────────────────────────────────────
 // Returns list of users with optional filters (role, company)
 const getAll = async (filters = {}) => {
@@ -27,8 +41,12 @@ const getAll = async (filters = {}) => {
   const vals = [];
 
   if (filters.role) {
-    query += ' AND u.role = ?';
-    vals.push(filters.role);
+    const roleFilter = normalizeRoleFilter(filters.role);
+    if (!roleFilter) {
+      throw { status: 400, message: 'Invalid role filter provided.' };
+    }
+    query += ' AND LOWER(u.role) = ?';
+    vals.push(roleFilter);
   }
 
   if (filters.company_id) {
@@ -94,6 +112,20 @@ const getTechnicians = async () => {
   return rows;
 };
 
+// ── getManagers ───────────────────────────────────────────
+// Returns active administrator/manager users for department assignment
+const getManagers = async () => {
+  const [rows] = await pool.query(
+    `SELECT id, name
+     FROM users
+     WHERE LOWER(role) IN ('admin', 'manager')
+       AND is_active = 1
+     ORDER BY name ASC`
+  );
+
+  return rows;
+};
+
 // ── create ───────────────────────────────────────────────
 // Creates a new user (admin action)
 const create = async ({ name, email, password, role, company_id, department_id }, adminId) => {
@@ -110,13 +142,25 @@ const create = async ({ name, email, password, role, company_id, department_id }
     throw { status: 400, message: 'Client users require company_id.' };
   }
 
+  if (!isStrongPassword(password)) {
+    throw { status: 400, message: 'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.' };
+  }
+
   const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
 
-  const [result] = await pool.query(
-    `INSERT INTO users (name, email, password_hash, role, company_id, department_id, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, 1)`,
-    [name, email, password_hash, role, company_id || null, department_id || null]
-  );
+  let result;
+  try {
+    [result] = await pool.query(
+      `INSERT INTO users (name, email, password_hash, role, company_id, department_id, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      [name, email, password_hash, role, company_id || null, department_id || null]
+    );
+  } catch (err) {
+    if (err && err.code === 'ER_DUP_ENTRY') {
+      throw { status: 409, message: 'A user with that email already exists.' };
+    }
+    throw err;
+  }
 
   await logService.record({
     userId: adminId,
@@ -155,10 +199,18 @@ const update = async (id, data, adminId) => {
 
   values.push(id);
 
-  const [result] = await pool.query(
-    `UPDATE users SET ${fields.join(', ')} WHERE id = ?`,
-    values
-  );
+  let result;
+  try {
+    [result] = await pool.query(
+      `UPDATE users SET ${fields.join(', ')} WHERE id = ?`,
+      values
+    );
+  } catch (err) {
+    if (err && err.code === 'ER_DUP_ENTRY') {
+      throw { status: 409, message: 'A user with that email already exists.' };
+    }
+    throw err;
+  }
 
   if (result.affectedRows === 0) {
     throw { status: 404, message: 'User not found.' };
@@ -198,8 +250,8 @@ const setStatus = async (id, isActive, adminId) => {
 // ── resetPassword ────────────────────────────────────────
 // Admin resets a user's password
 const resetPassword = async (id, password, adminId) => {
-  if (!password || password.length < 8) {
-    throw { status: 400, message: 'Password must be at least 8 characters.' };
+  if (!isStrongPassword(password)) {
+    throw { status: 400, message: 'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.' };
   }
 
   const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -239,6 +291,7 @@ module.exports = {
   getAll,
   getById,
   getTechnicians,
+  getManagers,
   create,
   update,
   setStatus,

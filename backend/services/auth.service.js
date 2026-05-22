@@ -22,9 +22,12 @@ const login = async (email, password) => {
 
   // 1. Look up the user by normalized email
   const [rows] = await pool.query(
-    `SELECT id, name, email, role, company_id, department_id, password_hash, is_active
-     FROM users
-     WHERE email = ? AND is_active = 1
+    `SELECT u.id, u.name, u.email, u.phone, u.role, u.company_id, u.department_id, 
+            c.name AS company_name, d.name AS department_name, u.password_hash, u.is_active
+     FROM users u
+     LEFT JOIN companies c ON c.id = u.company_id
+     LEFT JOIN departments d ON d.id = u.department_id
+     WHERE u.email = ? AND u.is_active = 1
      LIMIT 1`,
     [normalizedEmail]
   );
@@ -43,12 +46,15 @@ const login = async (email, password) => {
 
   // 3. Build JWT payload (exclude sensitive fields)
   const payload = {
-    id:         user.id,
-    name:       user.name,
-    email:      user.email,
-    role:       user.role,
-    company_id: user.company_id,
-    department_id: user.department_id
+    id:              user.id,
+    name:            user.name,
+    email:           user.email,
+    phone:           user.phone || null,
+    role:            user.role,
+    company_id:      user.company_id,
+    company_name:    user.company_name || null,
+    department_id:   user.department_id,
+    department_name: user.department_name || null
   };
 
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
@@ -67,7 +73,7 @@ const login = async (email, password) => {
 // Returns fresh user data for the authenticated user.
 const getMe = async (userId) => {
   const [rows] = await pool.query(
-    `SELECT u.id, u.name, u.email, u.role, u.company_id, u.department_id, u.created_at, u.is_active,
+    `SELECT u.id, u.name, u.email, u.phone, u.role, u.company_id, u.department_id, u.created_at, u.is_active,
             c.name AS company_name,
             d.name AS department_name
      FROM users u
@@ -102,11 +108,12 @@ const updateMe = async (userId, data) => {
     throw { status: 409, message: 'A user with that email already exists.' };
   }
 
+  const phone = (data.phone || '').trim() || null;
   const [result] = await pool.query(
     `UPDATE users
-     SET name = ?, email = ?
+     SET name = ?, email = ?, phone = ?
      WHERE id = ?`,
-    [name, email, userId]
+    [name, email, phone, userId]
   );
 
   if (result.affectedRows === 0) {
@@ -174,9 +181,8 @@ const requestPasswordReset = async (email) => {
     [normalizedEmail]
   );
 
-  // Always return success message to prevent email enumeration
   if (rows.length === 0) {
-    return { message: 'If the email exists, a reset link was sent.' };
+    throw { status: 400, message: 'Email does not exist' };
   }
 
   const user = rows[0];

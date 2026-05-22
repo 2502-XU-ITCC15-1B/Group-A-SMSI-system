@@ -3,6 +3,7 @@ window.TechnicianPortal = (() => {
     dashboard: 'dashboard',
     tickets: 'ticket',
     activity: 'log',
+    messages: 'mail',
     profile: 'settings'
   };
 
@@ -28,16 +29,36 @@ window.TechnicianPortal = (() => {
   }
 
   function clearAppSession() {
-    ['woman_token', 'woman_user', 'woman_role'].forEach((key) => {
-      localStorage.removeItem(key);
-      sessionStorage.removeItem(key);
+    if (typeof window.logout === 'function') {
+      window.logout();
+      return;
+    }
+
+    ['localStorage', 'sessionStorage'].forEach((storeName) => {
+      try {
+        const store = window[storeName];
+        const keysToRemove = [];
+
+        for (let i = 0; i < store.length; i += 1) {
+          const key = store.key(i);
+          if (key && key.startsWith('woman_')) {
+            keysToRemove.push(key);
+          }
+        }
+
+        keysToRemove.forEach((key) => store.removeItem(key));
+      } catch (_) {}
     });
   }
 
   function handleLogout(event) {
     if (event) event.preventDefault();
-    clearAppSession();
-    window.location.replace('/login.html');
+    if (typeof window.logout === 'function') {
+      window.logout();
+    } else {
+      clearAppSession();
+      window.location.replace('/login.html');
+    }
   }
 
   window.technicianLogout = handleLogout;
@@ -64,11 +85,13 @@ window.TechnicianPortal = (() => {
   function enhanceActions() {
     const actions = {
       refreshBtn: 'Refresh',
+      refreshThreadBtn: 'Refresh',
       backBtn: 'Back to Tickets',
       assignBtn: 'Assign',
       closeBtn: 'Close Ticket',
       updateStatusBtn: 'Update Status',
       sendResponseBtn: 'Send Response',
+      sendMessageBtn: 'Send Message',
       assignSubmitBtn: 'Assign Ticket'
     };
 

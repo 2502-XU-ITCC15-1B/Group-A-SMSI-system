@@ -6,6 +6,7 @@ const AdminPortal = (() => {
     companies: { title: 'Company Directory', subtitle: 'Maintain client organizations and their service-contact records.' },
     departments: { title: 'Departments', subtitle: 'Maintain operational departments and assign their managers.' },
     reports: { title: 'Reports', subtitle: 'Review ticket metrics, queue composition, and service distribution.' },
+    messages: { title: 'Messages', subtitle: 'Review user inbox threads and reply directly to client concerns.' },
     activity: { title: 'Activity Log', subtitle: 'Inspect recent system actions and operator audit history.' },
     profile: { title: 'Profile', subtitle: 'Update your administrator profile and password.' }
   };
@@ -54,16 +55,115 @@ const AdminPortal = (() => {
 
   function renderAttachmentHtml(url, attachmentType) {
     if (!url) return '';
-    const fullUrl = escapeHtml(url);
+    if (!url) return '';
+    // Build absolute URL by combining configured backend base with the relative path
+    const apiBase = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
+    let backendBase = apiBase ? apiBase.replace(/\/api\/?$/i, '').replace(/\/$/, '') : '';
+    if (!backendBase && window.LIVE_API) {
+      backendBase = window.LIVE_API.replace(/\/api\/?$/i, '');
+    }
+    let fullLink = '';
+    try {
+      const parsed = new URL(url, window.location.href);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        const isLocalHost = ['localhost', '127.0.0.1'].includes(parsed.hostname);
+        if (isLocalHost && backendBase) {
+          fullLink = `${backendBase}${parsed.pathname}${parsed.search}${parsed.hash}`;
+        } else {
+          fullLink = parsed.href;
+        }
+      }
+    } catch (e) {
+      // not an absolute url
+    }
+    if (!fullLink) fullLink = `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
+    const fullUrl = escapeHtml(fullLink);
     const fileName = decodeURIComponent(String(url).split('/').pop() || 'attachment');
     const label = '<p class="attachment-label">This response includes a file attachment</p>';
 
     if (attachmentType === 'image' || (attachmentType == null && isImageAttachment(url))) {
-      return `${label}<div class="timeline-attachment-wrap"><img class="timeline-attachment" src="${fullUrl}" alt="${escapeHtml(fileName)}"><p><a class="response-attachment" href="${fullUrl}" target="_blank" rel="noopener">Open image attachment</a></p></div>`;
+      return `${label}<div class="timeline-attachment-wrap"><img class="timeline-attachment" src="${fullUrl}" alt="${escapeHtml(fileName)}"><p><a class="response-attachment" href="${fullUrl}" target="_blank" rel="noopener noreferrer">Open image attachment</a></p></div>`;
     }
 
-    return `${label}<div class="timeline-attachment-wrap"><p><a class="attachment-file-link" href="${fullUrl}" target="_blank" rel="noopener">📎 Download attachment: ${escapeHtml(fileName)}</a></p></div>`;
+    return `${label}<div class="timeline-attachment-wrap"><p><a class="attachment-file-link" href="${fullUrl}" target="_blank" rel="noopener noreferrer">📎 Download attachment: ${escapeHtml(fileName)}</a></p></div>`;
   }
+
+  // Authenticated download helper for admin shell
+  async function authenticatedDownload(url, suggestedFilename) {
+    try {
+      const token = typeof getToken === 'function' ? getToken() : null;
+      if (!token) { alert('You are not authenticated. Please sign in to download attachments.'); return; }
+      const res = await fetch(url, { method: 'GET', headers: { 'Authorization': `Bearer ${token}` }, redirect: 'follow' });
+      if (res.status === 401 || res.status === 403) { alert('Unauthorized to access this attachment.'); return; }
+      if (!res.ok) { console.error('Attachment download failed', res.status); alert('Failed to download attachment.'); return; }
+      const blob = await res.blob();
+      let filename = suggestedFilename || '';
+      const cd = res.headers.get('Content-Disposition') || '';
+      const match = cd.match(/filename\*=UTF-8''([^;\n\r]+)|filename="?([^";]+)"?/i);
+      if (!filename && match) filename = decodeURIComponent(match[1] || match[2] || 'attachment');
+      if (!filename) { try { const u = new URL(url); filename = decodeURIComponent((u.pathname.split('/').pop() || 'attachment')); } catch (e) { filename = 'attachment'; } }
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = objectUrl; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+    } catch (err) { console.error('authenticatedDownload error', err); alert('An error occurred while downloading the attachment.'); }
+  }
+
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest && e.target.closest('.attachment-file-link');
+    if (!el) return;
+    const href = el.href; if (!href) return; e.preventDefault();
+    const suggested = el.getAttribute('data-filename') || (href.split('/').pop() || 'attachment');
+    authenticatedDownload(href, suggested);
+  });
+
+  // Intercept image open links and fetch with auth (smis-woman admin)
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest && e.target.closest('.response-attachment');
+    if (!el) return;
+    const href = el.href; if (!href) return; e.preventDefault();
+    (async function () {
+      const win = window.open('about:blank');
+      if (!win) {
+        alert('Unable to open attachment in a new window. Please allow popups and try again.');
+        return;
+      }
+      win.document.write('<!DOCTYPE html><html><head><title>Attachment</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;"><p>Loading attachment...</p></body></html>');
+      win.document.close();
+
+      try {
+        const token = typeof getToken === 'function' ? getToken() : null;
+        if (!token) {
+          win.document.body.innerHTML = '<p style="padding:1rem;">You are not authenticated. Please sign in to view attachments.</p>';
+          alert('You are not authenticated. Please sign in to view attachments.');
+          return;
+        }
+        const res = await fetch(href, { method: 'GET', headers: { 'Authorization': `Bearer ${token}` }, redirect: 'follow' });
+        if (res.status === 401 || res.status === 403) {
+          win.document.body.innerHTML = '<p style="padding:1rem;">Unauthorized to access this attachment.</p>';
+          alert('Unauthorized to access this attachment.');
+          return;
+        }
+        if (!res.ok) {
+          console.error('Image fetch failed', res.status);
+          win.document.body.innerHTML = `<p style="padding:1rem;">Failed to load attachment. (${res.status})</p>`;
+          alert('Failed to load attachment.');
+          return;
+        }
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const contentType = (res.headers.get('Content-Type') || '').toLowerCase();
+        win.document.body.style.margin = '0';
+        win.document.body.innerHTML = '';
+        if (contentType.startsWith('image/')) { const img = win.document.createElement('img'); img.src = objectUrl; img.style.maxWidth = '100%'; img.style.height = 'auto'; win.document.body.appendChild(img); }
+        else if (contentType.includes('pdf') || contentType === 'application/pdf') { const embed = win.document.createElement('embed'); embed.src = objectUrl; embed.type = 'application/pdf'; embed.style.width = '100%'; embed.style.height = '100vh'; win.document.body.appendChild(embed); }
+        else { const obj = win.document.createElement('object'); obj.data = objectUrl; obj.type = contentType || 'application/octet-stream'; obj.style.width = '100%'; obj.style.height = '100vh'; win.document.body.appendChild(obj); }
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      } catch (err) {
+        console.error('response-attachment handler error', err);
+        if (!win.closed) { win.document.body.innerHTML = '<p style="padding:1rem;">An error occurred while opening the attachment.</p>'; }
+        alert('An error occurred while opening the image.');
+      }
+    })();
+  });
 
   function icon(id, className = 'ui-icon') {
     const symbol = id.startsWith('ic-') ? id : `ic-${id}`;
@@ -89,7 +189,10 @@ const AdminPortal = (() => {
     }
 
     const user = await getMe();
-    if (!user || user.role !== 'admin') {
+    const normalizedRole = String(user?.role || '').trim().toLowerCase();
+    const allowedRoles = ['admin'];
+
+    if (!user || !allowedRoles.includes(normalizedRole)) {
       logout();
       return null;
     }
@@ -119,6 +222,7 @@ const AdminPortal = (() => {
             ${navLink('companies', 'Companies', 'building')}
             ${navLink('departments', 'Departments', 'dept')}
             ${navLink('reports', 'Reports', 'report')}
+            ${navLink('messages', 'Messages', 'mail')}
             ${navLink('activity', 'Activity Log', 'log')}
             ${navLink('profile', 'Profile', 'settings')}
           </nav>
@@ -146,7 +250,7 @@ const AdminPortal = (() => {
 
             <div class="topbar-actions">
               <button class="btn secondary icon-only" id="adminTopbarBell" type="button" aria-label="Notifications">${icon('bell')}</button>
-              <div class="admin-avatar" title="${escapeHtml(state.user?.name || 'Administrator')}">${avatarInitials(state.user?.name || 'Admin')}</div>
+              ${renderAvatarHtml(state.user)}
             </div>
           </header>
 
@@ -165,14 +269,32 @@ const AdminPortal = (() => {
     return name.split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   }
 
+  function getBackendBase() {
+    const apiBaseCandidate = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || window.LIVE_API || '';
+    const cleanedBase = apiBaseCandidate ? apiBaseCandidate.replace(/\/api\/?$/i, '').replace(/\/$/, '') : '';
+    return cleanedBase || window.location.origin;
+  }
+
+  function renderAvatarHtml(user) {
+    if (user && user.profile_picture) {
+      const backendBase = getBackendBase();
+      const src = `${backendBase}${user.profile_picture.startsWith('/') ? '' : '/'}${user.profile_picture}`;
+      return `<img class="admin-avatar-img" src="${escapeHtml(src)}" alt="${escapeHtml(user.name || 'avatar')}" title="${escapeHtml(user.name || '')}">`;
+    }
+    return `<div class="admin-avatar" title="${escapeHtml(user?.name || 'Administrator')}">${avatarInitials(user?.name || 'Admin')}</div>`;
+  }
+
   function renderPageShell(pageKey, bodyMarkup) {
     state.page = pageKey;
     document.body.innerHTML = layoutShell(pageKey);
     $('adminContent').innerHTML = bodyMarkup;
-    $('adminLogoutBtn').addEventListener('click', (e) => {
-      e.preventDefault();
-      window.logout();
-    });
+    const logoutButton = $('adminLogoutBtn') || document.querySelector('.sidebar-logout');
+    if (logoutButton) {
+      logoutButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.logout();
+      });
+    }
   }
 
   function statusBadge(status) {
@@ -337,20 +459,13 @@ const AdminPortal = (() => {
           </div>
         </section>
 
-        <section class="card stack">
-          <div>
-            <h2 class="section-title">System Activity</h2>
-            <p class="section-subtitle">Most recent administrative and ticket workflow actions.</p>
-          </div>
-          <div id="dashboardActivity" class="responses-list"></div>
-        </section>
+        <!-- System Activity removed from dashboard center; available via Activity Log link -->
       </section>
     `);
 
-    const [dashboard, tickets, logs, departments] = await Promise.all([
+    const [dashboard, tickets, departments] = await Promise.all([
       apiRequest('/admin/dashboard'),
       fetchTickets(),
-      fetchLogs({ limit: 8 }),
       fetchDepartments()
     ]);
 
@@ -399,19 +514,7 @@ const AdminPortal = (() => {
       });
     });
 
-    const activityNode = $('dashboardActivity');
-    activityNode.innerHTML = logs.length
-      ? logs.map((log) => `
-          <article class="timeline-item timeline-item-log">
-            <div class="timeline-item-header">
-              <strong>${escapeHtml(log.action || 'Activity')}</strong>
-              <span class="response-meta">${formatRelative(log.created_at)}</span>
-            </div>
-            <div class="response-role">${escapeHtml(log.user_name || 'System')} ${log.work_order_id ? `- ${escapeHtml(log.work_order_id)}` : ''}</div>
-            <p>${escapeHtml(log.details || '')}</p>
-          </article>
-        `).join('')
-      : '<div class="empty-state">No recent activity.</div>';
+    // System activity intentionally not rendered on the dashboard center.
   }
 
   async function openTicketPreviewModal(ticketId) {
@@ -437,7 +540,7 @@ const AdminPortal = (() => {
       $('adminModalSubtitle').textContent = ticket.title || '';
 
       const timeline = [
-        ...logs.map((log) => ({
+        ... (Array.isArray(logs) ? logs.filter((l) => String(l.action || '').toUpperCase() !== 'RESPONSE_ADDED') : []).map((log) => ({
           type: 'log',
           title: log.action || 'Activity',
           actor: log.user_name || 'System',
@@ -865,9 +968,10 @@ const AdminPortal = (() => {
       filterState.page = 1;
       render();
     });
-    $('userRoleFilter').addEventListener('change', (event) => {
+    $('userRoleFilter').addEventListener('change', async (event) => {
       filterState.role = event.target.value;
       filterState.page = 1;
+      state.users = await fetchUsers(filterState.role ? { role: filterState.role } : {});
       render();
     });
     $('userStatusFilter').addEventListener('change', (event) => {
@@ -1021,12 +1125,12 @@ const AdminPortal = (() => {
       </section>
     `);
 
-    const [departments, heads] = await Promise.all([
+    const [departments, managers] = await Promise.all([
       fetchDepartments(),
-      fetchUsers({ role: 'head' })
+      fetchManagers()
     ]);
     state.departments = departments;
-    state.heads = heads;
+    state.managers = managers;
     let query = '';
 
     const render = () => {
@@ -1079,7 +1183,7 @@ const AdminPortal = (() => {
               <label for="departmentManager">Manager</label>
               <select id="departmentManager">
                 <option value="">No manager</option>
-                ${state.heads.map((head) => `<option value="${head.id}" ${String(department?.manager_id || '') === String(head.id) ? 'selected' : ''}>${escapeHtml(head.name)}</option>`).join('')}
+                ${state.managers.map((manager) => `<option value="${manager.id}" ${String(department?.manager_id || '') === String(manager.id) ? 'selected' : ''}>${escapeHtml(manager.name)}</option>`).join('')}
               </select>
             </div>
             <div class="field">
@@ -1189,6 +1293,144 @@ const AdminPortal = (() => {
       : tableEmptyRow(2, 'No department metrics available.');
   }
 
+  async function initMessages() {
+    renderPageShell('messages', `
+      <section class="admin-two-column">
+        <section class="card stack" style="min-width:320px; max-width:380px;">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title">User Conversations</h2>
+              <p class="section-subtitle">Select a client to review the private support thread.</p>
+            </div>
+          </div>
+          <div class="table-wrap" style="max-height:660px; overflow:auto;">
+            <table>
+              <thead>
+                <tr><th>User</th><th>Email</th><th>Last Message</th><th>Unread</th></tr>
+              </thead>
+              <tbody id="adminMessageThreadsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card stack" id="adminMessageThreadPanel">
+          <div>
+            <h2 class="section-title">Message Preview</h2>
+            <p class="section-subtitle">Choose a user thread to reply directly.</p>
+          </div>
+          <div id="adminMessageThreadContent" class="responses-list"></div>
+          <form id="adminReplyForm" class="stack" style="margin-top:16px;">
+            <div class="field">
+              <label for="adminReplyText">Reply to client</label>
+              <textarea id="adminReplyText" rows="4" required placeholder="Type your reply here..."></textarea>
+            </div>
+            <p id="adminReplyStatus" class="form-msg"></p>
+            <div class="form-actions">
+              <button class="btn" type="submit">Send Reply</button>
+            </div>
+          </form>
+        </section>
+      </section>
+    `);
+
+    const threads = await fetchAdminMessageThreads();
+    state.messageThreads = threads;
+    state.activeMessageUserId = null;
+
+    const threadSummary = threads.reduce((map, message) => {
+      const clientId = message.sender_role === 'client' ? message.sender_id : message.receiver_id;
+      const clientName = message.sender_role === 'client' ? message.sender_name : message.receiver_name;
+      const clientEmail = message.sender_role === 'client' ? message.sender_email : message.receiver_email;
+      const lastMessage = message.message;
+      const lastAt = message.created_at;
+      const unreadCount = message.receiver_role === 'admin' && !message.is_read ? 1 : 0;
+
+      if (!map[clientId]) {
+        map[clientId] = {
+          user_id: clientId,
+          user_name: clientName,
+          user_email: clientEmail,
+          last_message: lastMessage,
+          last_at: lastAt,
+          unread_count: unreadCount
+        };
+      } else {
+        map[clientId].unread_count += unreadCount;
+        if (new Date(message.created_at) > new Date(map[clientId].last_at)) {
+          map[clientId].last_message = lastMessage;
+          map[clientId].last_at = message.created_at;
+        }
+      }
+
+      return map;
+    }, {});
+
+    const rows = Object.values(threadSummary).sort((a, b) => new Date(b.last_at) - new Date(a.last_at));
+    const tableBody = $('adminMessageThreadsBody');
+    tableBody.innerHTML = rows.length
+      ? rows.map((thread) => `
+          <tr class="table-row-link" data-client-id="${thread.user_id}">
+            <td>${escapeHtml(thread.user_name)}</td>
+            <td>${escapeHtml(thread.user_email)}</td>
+            <td>${escapeHtml(thread.last_message || '-')}</td>
+            <td>${thread.unread_count > 0 ? `<strong>${thread.unread_count}</strong>` : '-'}</td>
+          </tr>
+        `).join('')
+      : tableEmptyRow(4, 'No private messages available.');
+
+    tableBody.querySelectorAll('[data-client-id]').forEach((row) => {
+      row.addEventListener('click', () => loadAdminThread(Number(row.dataset.clientId)));
+    });
+
+    document.getElementById('adminReplyForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const userId = state.activeMessageUserId;
+      const textarea = document.getElementById('adminReplyText');
+      const statusNode = document.getElementById('adminReplyStatus');
+
+      if (!userId) {
+        statusNode.textContent = 'Please select a conversation first.';
+        return;
+      }
+
+      const value = textarea.value.trim();
+      if (!value) {
+        statusNode.textContent = 'Reply cannot be empty.';
+        return;
+      }
+
+      const result = await sendMessage({ receiver_id: userId, message: value });
+
+      if (!result?.success) {
+        statusNode.textContent = result?.message || 'Unable to send reply.';
+        textarea.focus();
+        return;
+      }
+
+      textarea.value = '';
+      statusNode.textContent = 'Reply sent successfully.';
+      await loadAdminThread(userId);
+    });
+
+    async function loadAdminThread(userId) {
+      state.activeMessageUserId = userId;
+      const messages = await fetchUserMessages(userId);
+      const panel = $('adminMessageThreadContent');
+
+      panel.innerHTML = messages.length
+        ? messages.map((msg) => `
+            <article class="timeline-item timeline-item-${msg.sender_role === 'client' ? 'response' : 'internal'}">
+              <div class="timeline-item-header">
+                <strong>${escapeHtml(msg.sender_role === 'client' ? msg.sender_name : 'Admin')}</strong>
+                <span class="response-meta">${formatDateTimeLocal(msg.created_at)}</span>
+              </div>
+              <p>${escapeHtml(msg.message)}</p>
+            </article>
+          `).join('')
+        : '<div class="empty-state">No conversation history yet.</div>';
+    }
+  }
+
   async function initActivity() {
     renderPageShell('activity', `
       <section class="card stack">
@@ -1204,7 +1446,8 @@ const AdminPortal = (() => {
     `);
 
     const logs = await fetchLogs({ limit: 200 });
-    const actions = [...new Set(logs.map((log) => log.action).filter(Boolean))].sort();
+    const visibleLogs = Array.isArray(logs) ? logs.filter((log) => String(log.action || '').toUpperCase() !== 'RESPONSE_ADDED') : [];
+    const actions = [...new Set(visibleLogs.map((log) => log.action).filter(Boolean))].sort();
     $('activityActionFilter').innerHTML += actions.map((action) => `<option value="${escapeHtml(action)}">${escapeHtml(action)}</option>`).join('');
 
     let search = '';
@@ -1212,6 +1455,7 @@ const AdminPortal = (() => {
 
     const render = () => {
       const filtered = logs.filter((log) => {
+        if (String(log.action || '').toUpperCase() === 'RESPONSE_ADDED') return false;
         const text = `${log.action || ''} ${log.details || ''} ${log.user_name || ''} ${log.work_order_id || ''}`.toLowerCase();
         return (!search || text.includes(search)) && (!actionFilter || log.action === actionFilter);
       });
@@ -1312,6 +1556,7 @@ const AdminPortal = (() => {
     companies: initCompanies,
     departments: initDepartments,
     reports: initReports,
+    messages: initMessages,
     activity: initActivity,
     profile: initProfile
   };

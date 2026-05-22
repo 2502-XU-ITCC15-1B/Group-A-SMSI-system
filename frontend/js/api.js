@@ -9,65 +9,232 @@ if (!apiBaseUrl) {
   throw new Error('API_BASE_URL is not configured. Load frontend/js/config.js before frontend/js/api.js.');
 }
 
+// Shared navigation helper used by multiple role shells
+window.SharedNav = (function () {
+  function icon(id) {
+    const symbol = id.startsWith('ic-') ? id : `ic-${id}`;
+    return `<svg class="ui-icon" aria-hidden="true"><use href="#${symbol}"></use></svg>`;
+  }
+
+  function escapeHtml(value = '') {
+    return String(value).replace(/[&<>'"]/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    }[char]));
+  }
+
+  function buildNavItems(role) {
+    if (role === 'admin') {
+      return [
+        { key: 'dashboard', label: 'Dashboard', href: '/admin/dashboard.html', icon: 'dashboard' },
+        { key: 'tickets', label: 'Tickets', href: '/admin/tickets.html', icon: 'ticket' },
+        { key: 'users', label: 'Users', href: '/admin/users.html', icon: 'users' },
+        { key: 'companies', label: 'Companies', href: '/admin/companies.html', icon: 'building' },
+        { key: 'departments', label: 'Departments', href: '/admin/departments.html', icon: 'dept' },
+        { key: 'reports', label: 'Reports', href: '/admin/reports.html', icon: 'report' },
+        { key: 'activity', label: 'Activity Log', href: '/admin/activity-log.html', icon: 'log' },
+        { key: 'system-activity', label: 'System Activity', href: '/admin/system-activity.html', icon: 'log' },
+        { key: 'messages', label: 'Inbox', href: '/admin/messages.html', icon: 'mail' },
+        { key: 'profile', label: 'Profile', href: '/admin/profile.html', icon: 'settings' }
+      ];
+    }
+
+    if (role === 'client') {
+      return [
+        { key: 'dashboard', label: 'Dashboard', href: '/client/dashboard.html', icon: 'dashboard' },
+        { key: 'requests', label: 'My Requests', href: '/client/requests.html', icon: 'ticket' },
+        { key: 'messages', label: 'Inbox', href: '/client/messages.html', icon: 'mail' },
+        { key: 'profile', label: 'Profile', href: '/client/profile.html', icon: 'settings' }
+      ];
+    }
+
+    // default technician/head shell
+    return [
+      { key: 'dashboard', label: 'Dashboard', href: '/technician/dashboard.html', icon: 'dashboard' },
+      { key: 'tickets', label: 'Tickets', href: '/technician/tickets.html', icon: 'ticket' },
+      { key: 'activity', label: 'Activity', href: '/technician/activity.html', icon: 'log' },
+      { key: 'messages', label: 'Inbox', href: '/technician/messages.html', icon: 'mail' },
+      { key: 'profile', label: 'Profile', href: '/technician/profile.html', icon: 'settings' }
+    ];
+  }
+
+  function getNavHtml(role, user, activeKey) {
+    const items = buildNavItems(role);
+    const navItems = items.map((it) => `
+      <a class="nav-item${activeKey === it.key ? ' active' : ''}" data-nav="${it.key}" href="${it.href}">${icon(it.icon)}<span>${escapeHtml(it.label)}</span></a>
+    `).join('');
+
+    const userName = escapeHtml((user && user.name) || (role === 'admin' ? 'Administrator' : 'User'));
+    const userMeta = escapeHtml((user && (user.email || user.company_name)) || '');
+
+    return `
+      <aside class="sidebar">
+        <div class="brand">
+          <img src="/assets/logo.png" alt="SMSi">
+          <div>
+            <strong>SMSi</strong>
+            <span>${escapeHtml(role === 'admin' ? 'admin portal' : role === 'client' ? 'client portal' : 'technician portal')}</span>
+          </div>
+        </div>
+        <nav>
+          ${navItems}
+        </nav>
+        <div class="sidebar-footer">
+          <div class="sidebar-user-label">Signed in as</div>
+          <div class="sidebar-user">${userName}</div>
+          <div class="sidebar-company">${userMeta}</div>
+          <button id="sidebarLogoutBtn" class="btn secondary sidebar-logout" type="button">Logout</button>
+        </div>
+      </aside>
+    `;
+  }
+
+  return {
+    getNavHtml
+  };
+})();
+
 /* ===========================================================
    SESSION HANDLING
 =========================================================== */
-const sessionKeys = ['woman_token', 'woman_user', 'woman_role'];
-const TOKEN_EXP_KEY = 'woman_token_exp';
+const SESSION_BASE_KEYS = {
+  token: 'woman_token',
+  user: 'woman_user',
+  id: 'woman_user_id',
+  role: 'woman_role',
+  company_id: 'woman_company_id',
+  company_name: 'woman_company_name',
+  department_id: 'woman_department_id',
+  department_name: 'woman_department_name',
+  exp: 'woman_token_exp'
+};
 
-function storageGet(key) {
-  return localStorage.getItem(key) || sessionStorage.getItem(key);
+function getPageRole() {
+  const rawPath = String(window.location.pathname || window.location.href || '');
+  const segments = rawPath.split(/[\/]+/).map((segment) => String(segment || '').trim().toLowerCase()).filter(Boolean);
+  const role = segments.find((segment) => ['admin', 'client', 'technician', 'head'].includes(segment));
+  return role || '';
 }
 
-function storageSet(key, value) {
-  localStorage.setItem(key, value);
-  sessionStorage.setItem(key, value);
+function normalizeRole(role) {
+  return String(role || '').trim().toLowerCase();
 }
 
-function storageRemoveSession() {
-  sessionKeys.forEach((key) => {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
+function normalizeStorageRole(role) {
+  const normalized = normalizeRole(role);
+  return normalized === 'head' ? 'technician' : normalized;
+}
+
+function buildSessionKey(baseKey, role) {
+  const suffix = normalizeStorageRole(role) ? `_${normalizeStorageRole(role)}` : '';
+  return `${baseKey}${suffix}`;
+}
+
+function storageGet(key, role) {
+  const actualKey = buildSessionKey(SESSION_BASE_KEYS[key], role || getPageRole());
+  const storedValue = localStorage.getItem(actualKey) || sessionStorage.getItem(actualKey);
+  if (storedValue != null) {
+    return storedValue;
+  }
+
+  // fallback for sessions stored under shared legacy keys
+  const legacyKey = SESSION_BASE_KEYS[key];
+  return localStorage.getItem(legacyKey) || sessionStorage.getItem(legacyKey);
+}
+
+function storageSet(key, value, role) {
+  const actualKey = buildSessionKey(SESSION_BASE_KEYS[key], role || getPageRole());
+  localStorage.setItem(actualKey, value);
+  sessionStorage.setItem(actualKey, value);
+
+  const legacyKey = SESSION_BASE_KEYS[key];
+  if (legacyKey !== actualKey) {
+    localStorage.setItem(legacyKey, value);
+    sessionStorage.setItem(legacyKey, value);
+  }
+}
+
+function storageRemoveSession(role = getPageRole()) {
+  const normalizedRole = normalizeStorageRole(role);
+  if (!normalizedRole) return;
+
+  ['token', 'user', 'id', 'role', 'company_id', 'company_name', 'department_id', 'department_name', 'exp'].forEach((key) => {
+    const actualKey = buildSessionKey(SESSION_BASE_KEYS[key], normalizedRole);
+    const legacyKey = SESSION_BASE_KEYS[key];
+    localStorage.removeItem(actualKey);
+    sessionStorage.removeItem(actualKey);
+    if (legacyKey !== actualKey) {
+      localStorage.removeItem(legacyKey);
+      sessionStorage.removeItem(legacyKey);
+    }
   });
-  // clear stored token expiry and any scheduled auto-logout
-  try { clearAutoLogout(); } catch (_) {}
+
+  try { clearAutoLogout(normalizedRole); } catch (_) {}
 }
 
-const getToken = () => storageGet('woman_token');
+const getToken = () => storageGet('token');
 
 const getUser = () => {
   try {
-    return JSON.parse(storageGet('woman_user'));
+    return JSON.parse(storageGet('user'));
   } catch {
     return null;
   }
 };
 
 const saveSession = (token, user) => {
-  storageSet('woman_token', token);
-  storageSet('woman_user', JSON.stringify(user));
-  storageSet('woman_role', user.role);
-  // schedule auto-logout based on token expiry
-  try { scheduleAutoLogout(token); } catch (_) {}
+  const actualRole = normalizeRole(user?.role) || getPageRole();
+  const storageRole = normalizeStorageRole(user?.role) || getPageRole();
+  if (!actualRole || !storageRole) return;
+
+  storageSet('token', token, storageRole);
+  storageSet('user', JSON.stringify(user), storageRole);
+  storageSet('role', actualRole, storageRole);
+  if (user?.id) {
+    storageSet('id', String(user.id), storageRole);
+  }
+  if (user?.company_id) {
+    storageSet('company_id', String(user.company_id), storageRole);
+  }
+  if (user?.company_name) {
+    storageSet('company_name', String(user.company_name), storageRole);
+  }
+  if (user?.department_id) {
+    storageSet('department_id', String(user.department_id), storageRole);
+  }
+  if (user?.department_name) {
+    storageSet('department_name', String(user.department_name), storageRole);
+  }
+
+  try { scheduleAutoLogout(token, storageRole); } catch (_) {}
 };
 
-function logout() {
-  storageRemoveSession();
+function logout(role = getPageRole()) {
+  storageRemoveSession(role);
   window.location.href = '/login.html';
 }
 
-function saveTokenExpiry(exp) {
+function saveTokenExpiry(exp, role = getPageRole()) {
   if (!exp) return;
-  storageSet(TOKEN_EXP_KEY, String(exp));
+  const storageRole = normalizeStorageRole(role) || getPageRole();
+  storageSet('exp', String(exp), storageRole);
 }
 
-function clearAutoLogout() {
-  if (window._woman_logout_timeout) {
-    clearTimeout(window._woman_logout_timeout);
-    window._woman_logout_timeout = null;
+function clearAutoLogout(role = getPageRole()) {
+  if (!window._woman_logout_timeouts) {
+    window._woman_logout_timeouts = {};
   }
-  localStorage.removeItem(TOKEN_EXP_KEY);
-  sessionStorage.removeItem(TOKEN_EXP_KEY);
+
+  const normalizedRole = normalizeStorageRole(role);
+  if (!normalizedRole) return;
+
+  if (window._woman_logout_timeouts[normalizedRole]) {
+    clearTimeout(window._woman_logout_timeouts[normalizedRole]);
+    delete window._woman_logout_timeouts[normalizedRole];
+  }
+
+  const expKey = buildSessionKey(SESSION_BASE_KEYS.exp, normalizedRole);
+  localStorage.removeItem(expKey);
+  sessionStorage.removeItem(expKey);
 }
 
 function parseJwt(token) {
@@ -82,34 +249,57 @@ function parseJwt(token) {
   }
 }
 
-function scheduleAutoLogout(token) {
-  clearAutoLogout();
+function scheduleAutoLogout(token, role = getPageRole()) {
+  clearAutoLogout(role);
   if (!token) return;
   const payload = parseJwt(token);
   if (!payload || !payload.exp) return;
-  saveTokenExpiry(payload.exp);
+  saveTokenExpiry(payload.exp, role);
   const ms = payload.exp * 1000 - Date.now();
   if (ms <= 0) {
-    // already expired
-    logout();
+    logout(role);
     return;
   }
-  // add small buffer
-  window._woman_logout_timeout = setTimeout(() => {
+  if (!window._woman_logout_timeouts) {
+    window._woman_logout_timeouts = {};
+  }
+  const normalizedRole = normalizeStorageRole(role);
+  window._woman_logout_timeouts[normalizedRole] = setTimeout(() => {
     try { alert('Session expired. You will be logged out.'); } catch (_) {}
-    logout();
+    logout(role);
   }, ms + 1000);
 }
 
-function isTokenExpired() {
-  const exp = Number(storageGet(TOKEN_EXP_KEY));
+function isTokenExpired(role = getPageRole()) {
+  const exp = Number(storageGet('exp', role));
   if (!exp) return true;
   return Date.now() >= exp * 1000;
 }
 
 function saveUserSession(user) {
-  storageSet('woman_user', JSON.stringify(user));
-  storageSet('woman_role', user.role);
+  const actualRole = normalizeRole(user?.role) || getPageRole();
+  const storageRole = normalizeStorageRole(user?.role) || getPageRole();
+  if (!actualRole || !storageRole) return;
+
+  storageSet('user', JSON.stringify(user), storageRole);
+  if (user?.id) {
+    storageSet('id', String(user.id), storageRole);
+  }
+  if (user?.role) {
+    storageSet('role', actualRole, storageRole);
+  }
+  if (user?.company_id) {
+    storageSet('company_id', String(user.company_id), storageRole);
+  }
+  if (user?.company_name) {
+    storageSet('company_name', String(user.company_name), storageRole);
+  }
+  if (user?.department_id) {
+    storageSet('department_id', String(user.department_id), storageRole);
+  }
+  if (user?.department_name) {
+    storageSet('department_name', String(user.department_name), storageRole);
+  }
 }
 
 /* ===========================================================
@@ -118,10 +308,19 @@ function saveUserSession(user) {
 async function apiRequest(path, options = {}) {
   const token = getToken();
 
-  // if token exists but is expired, force logout immediately
-  if (token && isTokenExpired()) {
-    try { logout(); } catch (_) {}
-    return null;
+  // if token exists, try to determine expiry (prefer stored expiry, fall back to JWT payload)
+  if (token) {
+    try {
+      const expFromStorage = Number(storageGet('exp')) || 0;
+      const jwtPayload = parseJwt(token) || {};
+      const exp = expFromStorage || (jwtPayload.exp ? Number(jwtPayload.exp) : 0);
+      if (exp && Date.now() >= exp * 1000) {
+        try { logout(); } catch (_) {}
+        return null;
+      }
+    } catch (e) {
+      // if parsing fails, do not force logout here — let requests fail gracefully
+    }
   }
 
   const headers = {
@@ -139,8 +338,33 @@ async function apiRequest(path, options = {}) {
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 401) {
+      if (path === '/auth/me') {
+        return null;
+      }
+
+      const user = getUser();
+      const normalizedRole = String(user?.role || '').trim().toLowerCase();
+      const allowedRoles = ['admin', 'head', 'client', 'technician'];
+
+      if (allowedRoles.includes(normalizedRole) && normalizedRole !== 'admin') {
+        return {
+          success: false,
+          message: data.message || 'Unauthorized'
+        };
+      }
+
       logout();
       return null;
+    }
+
+    // If account was disabled server-side, immediately clear session and force re-login
+    if (res.status === 403) {
+      const msg = String(data?.message || '').toLowerCase();
+      if (msg.includes('disabled') || msg.includes('account disabled')) {
+        try { alert('Your account has been disabled. You will be logged out.'); } catch (_) {}
+        try { logout(); } catch (_) {}
+        return null;
+      }
     }
 
     if (!res.ok) {
@@ -359,6 +583,11 @@ async function fetchTechnicians() {
   return res?.users || [];
 }
 
+async function fetchManagers() {
+  const res = await apiRequest('/users/managers');
+  return res?.users || [];
+}
+
 async function createUser(payload) {
   return await apiRequest('/users', {
     method: 'POST',
@@ -434,6 +663,57 @@ async function fetchDepartments() {
   return res?.departments || [];
 }
 
+/* ===========================================================
+   MESSAGING
+=========================================================== */
+async function sendMessage(payload) {
+  // payload: { receiver_id?, message }
+  if (!payload) return { success: false, message: 'Invalid payload' };
+
+  const working = { ...payload };
+
+  // If receiver_id not provided, request default admin id from backend.
+  if (!working.receiver_id) {
+    const adminRes = await apiRequest('/messages/default-admin');
+    if (adminRes?.success && adminRes.admin_id) {
+      working.receiver_id = adminRes.admin_id;
+    } else {
+      const defaultAdminId = Number(window.APP_CONFIG?.DEFAULT_ADMIN_ID || 1);
+      if (!defaultAdminId) {
+        return { success: false, message: adminRes?.message || 'Unable to resolve default admin.' };
+      }
+      working.receiver_id = defaultAdminId;
+    }
+  }
+
+  const res = await apiRequest('/messages', {
+    method: 'POST',
+    body: JSON.stringify(working)
+  });
+
+  if (!res) return { success: false, message: 'No response' };
+  return res;
+}
+
+async function fetchUserMessages(userId) {
+  if (!userId) return [];
+  const res = await apiRequest(`/messages/user/${encodeURIComponent(String(userId))}`);
+  if (!res?.success) return [];
+  return res.messages || [];
+}
+
+async function fetchAdminMessageThreads() {
+  const res = await apiRequest('/messages/admin');
+  if (!res?.success) return [];
+  return res.threads || [];
+}
+
+async function fetchMessageRecipients() {
+  const res = await apiRequest('/messages/recipients');
+  if (!res?.success) return [];
+  return res.recipients || [];
+}
+
 async function fetchDepartment(id) {
   const res = await apiRequest(`/departments/${id}`);
   return res?.department || null;
@@ -495,7 +775,10 @@ function requireRole(...roles) {
     return false;
   }
 
-  if (!roles.includes(user.role)) {
+  const normalizedRole = String(user.role || '').trim().toLowerCase();
+  const allowedRoles = roles.map((role) => String(role || '').trim().toLowerCase());
+
+  if (!allowedRoles.includes(normalizedRole)) {
     alert('Access denied.');
     history.back();
     return false;
