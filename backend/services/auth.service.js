@@ -27,7 +27,7 @@ const login = async (email, password) => {
      FROM users u
      LEFT JOIN companies c ON c.id = u.company_id
      LEFT JOIN departments d ON d.id = u.department_id
-     WHERE u.email = ? AND u.is_active = 1
+     WHERE LOWER(u.email) = ?
      LIMIT 1`,
     [normalizedEmail]
   );
@@ -37,6 +37,10 @@ const login = async (email, password) => {
   }
 
   const user = rows[0];
+
+  if (!user.is_active) {
+    throw { status: 403, message: 'Account temporarily locked, contact Admin' };
+  }
 
   // 2. Compare submitted password with stored hash
   const ok = await bcrypt.compare(password, user.password_hash);

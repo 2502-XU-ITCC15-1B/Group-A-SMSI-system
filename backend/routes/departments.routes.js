@@ -4,12 +4,12 @@ const departmentService  = require('../services/department.service');
 const { authenticate, authorize } = require('../middleware/auth');
 
 // GET    /api/departments
-// Roles: admin, technician, head
+// Roles: admin, technician, head, client
 // → list all departments
 router.get(
   '/',
   authenticate,
-  authorize('admin', 'technician', 'head'),
+  authorize('admin', 'technician', 'head', 'client'),
   async (req, res) => {
     try {
       const departments = await departmentService.getAll();

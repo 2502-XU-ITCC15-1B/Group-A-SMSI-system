@@ -1,6 +1,20 @@
 window.ClientPortal = (() => {
   let modalInitialized = false;
   let onTicketCreated = null;
+  let cachedDepartments = [];
+  const HELP_TOPICS = [
+    { value: 'system-outage', label: 'System Outage / Service Unavailable', departmentName: 'IT Support' },
+    { value: 'software-access', label: 'Software Access / Login Problem', departmentName: 'IT Support' },
+    { value: 'bug-error', label: 'Application Bug / Error', departmentName: 'IT Support' },
+    { value: 'web-graphics-design', label: 'Web / Graphics Change Request', departmentName: 'IT Support' },
+    { value: 'network-connectivity', label: 'Network / Internet Connectivity', departmentName: 'IT Support' },
+    { value: 'hardware-device', label: 'Hardware / Device Issue', departmentName: 'IT Support' },
+    { value: 'account-payroll', label: 'Account, Payroll, or Financial Concern', departmentName: 'Finance' },
+    { value: 'billing-invoice', label: 'Billing / Invoice Concern', departmentName: 'Finance' },
+    { value: 'hr-employee-concern', label: 'HR / Employee Concern', departmentName: 'HR Support' },
+    { value: 'facilities-safety', label: 'Facilities / Safety Concern', departmentName: 'Facilities' },
+    { value: 'other', label: 'Other / Not Listed', departmentName: '' }
+  ];
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', href: '/client/dashboard.html', icon: 'dashboard' },
     { key: 'requests', label: 'My Requests', href: '/client/requests.html', icon: 'ticket' },
@@ -171,18 +185,41 @@ window.ClientPortal = (() => {
           <form id="clientTicketForm" class="stack">
             <div class="form-row">
               <div class="field">
-                <label for="ticketRequestor">Requesting User</label>
-                <input id="ticketRequestor" type="text" readonly>
+                <label for="ticketClientEmail">Email</label>
+                <input id="ticketClientEmail" type="email" maxlength="150" required>
               </div>
 
               <div class="field">
-                <label for="ticketCompany">Company</label>
-                <input id="ticketCompany" type="text" readonly>
+                <label for="ticketClientPhone">Phone Number</label>
+                <input id="ticketClientPhone" type="text" maxlength="30" required>
               </div>
             </div>
 
             <div class="field">
-              <label for="ticketTitle">Title</label>
+              <label for="ticketClientName">Full Name</label>
+              <input id="ticketClientName" type="text" maxlength="150" required>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="ticketHelpTopic">Help Topic</label>
+                <select id="ticketHelpTopic" required>
+                  <option value="">Select help topic</option>
+                  ${HELP_TOPICS.map((topic) => `<option value="${topic.value}">${escapeHtml(topic.label)}</option>`).join('')}
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="ticketDepartment">Department</label>
+                <select id="ticketDepartment">
+                  <option value="">Auto-select by topic</option>
+                </select>
+                <small id="ticketDeptHint" class="help-text">Department will be auto-selected based on help topic.</small>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="ticketTitle">Issue Title / Summary</label>
               <input id="ticketTitle" type="text" maxlength="150" required>
             </div>
 
@@ -228,8 +265,10 @@ window.ClientPortal = (() => {
     });
 
     document.getElementById('clientTicketForm')?.addEventListener('submit', submitTicketForm);
+    document.getElementById('ticketHelpTopic')?.addEventListener('change', handleHelpTopicChange);
 
     populateTicketContext();
+    void hydrateDepartments();
     wireOpenModalButtons();
   }
 
@@ -244,11 +283,55 @@ window.ClientPortal = (() => {
 
   function populateTicketContext() {
     const me = getUser() || {};
-    const requestorInput = document.getElementById('ticketRequestor');
-    const companyInput = document.getElementById('ticketCompany');
+    const nameInput = document.getElementById('ticketClientName');
+    const emailInput = document.getElementById('ticketClientEmail');
+    const phoneInput = document.getElementById('ticketClientPhone');
 
-    if (requestorInput) requestorInput.value = me.name || '';
-    if (companyInput) companyInput.value = me.company_name || 'Not assigned';
+    if (nameInput) nameInput.value = me.name || '';
+    if (emailInput) emailInput.value = me.email || '';
+    if (phoneInput) phoneInput.value = me.phone || '';
+  }
+
+  async function hydrateDepartments() {
+    const departmentSelect = document.getElementById('ticketDepartment');
+    if (!departmentSelect) return;
+
+    try {
+      cachedDepartments = await fetchDepartments();
+    } catch (_) {
+      cachedDepartments = [];
+    }
+
+    const options = ['<option value="">Auto-select by topic</option>'].concat(
+      cachedDepartments.map((department) => `<option value="${department.id}">${escapeHtml(department.name || 'Unnamed Department')}</option>`)
+    );
+
+    departmentSelect.innerHTML = options.join('');
+  }
+
+  function handleHelpTopicChange() {
+    const selectedTopic = document.getElementById('ticketHelpTopic')?.value || '';
+    const departmentSelect = document.getElementById('ticketDepartment');
+    const hint = document.getElementById('ticketDeptHint');
+    if (!departmentSelect) return;
+
+    const topicConfig = HELP_TOPICS.find((topic) => topic.value === selectedTopic);
+    const mappedDepartmentName = topicConfig?.departmentName || '';
+    if (!mappedDepartmentName) {
+      departmentSelect.value = '';
+      if (hint) hint.textContent = 'Please choose a department manually for this topic.';
+      return;
+    }
+
+    const mappedDepartment = cachedDepartments.find((department) => String(department.name || '').toLowerCase() === mappedDepartmentName.toLowerCase());
+    if (mappedDepartment) {
+      departmentSelect.value = String(mappedDepartment.id);
+      if (hint) hint.textContent = `Auto-routed to ${mappedDepartment.name}. You can still change it.`;
+      return;
+    }
+
+    departmentSelect.value = '';
+    if (hint) hint.textContent = `No "${mappedDepartmentName}" department found. Please select manually.`;
   }
 
   function setModalMessage(message = '', type = '') {
@@ -270,6 +353,7 @@ window.ClientPortal = (() => {
     document.getElementById('clientTicketForm')?.reset();
     document.getElementById('ticketPriority').value = 'Medium';
     populateTicketContext();
+    handleHelpTopicChange();
     setModalMessage();
   }
 
@@ -278,13 +362,18 @@ window.ClientPortal = (() => {
 
     const submitBtn = document.getElementById('submitTicketBtn');
     const payload = {
+      client_email: document.getElementById('ticketClientEmail')?.value.trim(),
+      client_phone: document.getElementById('ticketClientPhone')?.value.trim(),
+      client_full_name: document.getElementById('ticketClientName')?.value.trim(),
+      help_topic: document.getElementById('ticketHelpTopic')?.value,
+      department_id: document.getElementById('ticketDepartment')?.value || null,
       title: document.getElementById('ticketTitle')?.value.trim(),
       priority: document.getElementById('ticketPriority')?.value,
       description: document.getElementById('ticketDescription')?.value.trim()
     };
 
-    if (!payload.title || !payload.description || !payload.priority) {
-      setModalMessage('All ticket fields are required.', 'error');
+    if (!payload.client_email || !payload.client_phone || !payload.client_full_name || !payload.help_topic || !payload.title || !payload.description || !payload.priority) {
+      setModalMessage('Please complete all required fields.', 'error');
       return;
     }
 

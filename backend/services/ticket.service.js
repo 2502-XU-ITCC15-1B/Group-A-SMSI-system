@@ -20,8 +20,12 @@ const generateWorkOrderId = async () => {
 const BASE_SELECT = `
   SELECT t.*,
          u_req.name AS requestor_name,
+         u_req.email AS requestor_email,
          u_tech.name AS technician_name,
          c.name AS company_name,
+         c.contact_person AS company_contact_person,
+         c.contact_email AS company_contact_email,
+         c.is_active AS company_is_active,
          d.name AS department_name
   FROM tickets t
   LEFT JOIN users u_req ON u_req.id = t.requestor_id
@@ -115,6 +119,30 @@ const getById = async (id, user) => {
 // -------------------------------------------------------
 const create = async (data, user) => {
   const work_order_id = await generateWorkOrderId();
+  const normalizedHelpTopic = String(data.help_topic || '').trim();
+  const normalizedClientName = String(data.client_full_name || '').trim();
+  const normalizedClientEmail = String(data.client_email || '').trim();
+  const normalizedClientPhone = String(data.client_phone || '').trim();
+
+  const HELP_TOPIC_DEPARTMENT_MAP = {
+    'system-outage': 'IT Support',
+    'software-access': 'IT Support',
+    'bug-error': 'IT Support',
+    'web-graphics-design': 'IT Support',
+    'network-connectivity': 'IT Support',
+    'hardware-device': 'IT Support',
+    'account-payroll': 'Finance',
+    'billing-invoice': 'Finance',
+    'hr-employee-concern': 'HR Support',
+    'facilities-safety': 'Facilities',
+    'other': ''
+  };
+
+  if (user.role === 'client') {
+    if (!normalizedClientName || !normalizedClientEmail || !normalizedClientPhone || !normalizedHelpTopic || !data.title || !data.description) {
+      throw { status: 400, message: 'client_full_name, client_email, client_phone, help_topic, title, and description are required.' };
+    }
+  }
 
   // Validate referenced company and department IDs if provided
   if (data.company_id) {
@@ -131,16 +159,31 @@ const create = async (data, user) => {
     }
   }
 
+  let resolvedDepartmentId = data.department_id || null;
+  if (!resolvedDepartmentId && normalizedHelpTopic) {
+    const mappedDepartmentName = HELP_TOPIC_DEPARTMENT_MAP[normalizedHelpTopic] || '';
+    if (mappedDepartmentName) {
+      const [deptByNameRows] = await pool.query('SELECT id FROM departments WHERE LOWER(name) = LOWER(?) LIMIT 1', [mappedDepartmentName]);
+      if (deptByNameRows.length) {
+        resolvedDepartmentId = deptByNameRows[0].id;
+      }
+    }
+  }
+
   const [result] = await pool.query(
     `INSERT INTO tickets
-      (work_order_id, title, description, company_id, department_id, requestor_id, priority, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'Open')`,
+      (work_order_id, client_full_name, client_email, client_phone, help_topic, title, description, company_id, department_id, requestor_id, priority, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Open')`,
     [
       work_order_id,
+      normalizedClientName || null,
+      normalizedClientEmail || null,
+      normalizedClientPhone || null,
+      normalizedHelpTopic || null,
       data.title,
       data.description || null,
       data.company_id || null,
-      data.department_id || null,
+      resolvedDepartmentId,
       data.requestor_id,
       data.priority || 'Medium'
     ]

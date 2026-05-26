@@ -19,13 +19,15 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5000';
 // ── login ────────────────────────────────────────────────
 // Verifies credentials and returns a signed JWT + user info.
 const login = async (email, password) => {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+
   // 1. Look up the user by email
   const [rows] = await pool.query(
     `SELECT id, name, email, role, company_id, department_id, password_hash, is_active
      FROM users
-     WHERE email = $1 AND is_active = 1
+     WHERE LOWER(email) = $1
      LIMIT 1`,
-    [email]
+    [normalizedEmail]
   );
 
   if (rows.length === 0) {
@@ -33,6 +35,10 @@ const login = async (email, password) => {
   }
 
   const user = rows[0];
+
+  if (!user.is_active) {
+    throw { status: 403, message: 'Account temporarily locked, contact Admin' };
+  }
 
   // 2. Compare submitted password with stored hash
   const ok = await bcrypt.compare(password, user.password_hash);

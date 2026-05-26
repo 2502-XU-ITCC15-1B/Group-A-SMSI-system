@@ -3,11 +3,7 @@
 // Fully aligned with backend routes/services
 // ============================================================
 
-const apiBaseUrl = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL;
-
-if (!apiBaseUrl) {
-  throw new Error('API_BASE_URL is not configured. Load frontend/js/config.js before frontend/js/api.js.');
-}
+const apiBaseUrl = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || '/api';
 
 /* ===========================================================
    SESSION HANDLING
@@ -62,7 +58,7 @@ function storageRemoveSession(role = getPageRole()) {
   });
 }
 
-const getToken = () => storageGet('token');
+function getToken() { return storageGet('token'); }
 
 const getUser = () => {
   try {
@@ -102,7 +98,7 @@ function saveUserSession(user) {
    CORE REQUEST WRAPPER
 =========================================================== */
 async function apiRequest(path, options = {}) {
-  const token = getToken();
+  const token = storageGet('token');
 
   const headers = {
     ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
@@ -119,6 +115,13 @@ async function apiRequest(path, options = {}) {
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 401) {
+      if (path === '/auth/login') {
+        return {
+          success: false,
+          message: data.message || 'Invalid login credentials'
+        };
+      }
+
       if (path === '/auth/me') {
         return null;
       }
@@ -513,4 +516,5 @@ async function apiFetch(path, options = {}) {
 
 // Expose logout to window scope
 window.logout = logout;
+
 

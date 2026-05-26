@@ -170,6 +170,10 @@ const AdminPortal = (() => {
     return `<svg class="${className}" aria-hidden="true"><use href="#${symbol}"></use></svg>`;
   }
 
+  function imageIcon(src, alt = '', className = 'action-icon') {
+    return `<img class="${className}" src="${src}" alt="${escapeHtml(alt)}" aria-hidden="true">`;
+  }
+
   async function loadIconSprite() {
     if (document.getElementById('icon-sprite')) return;
 
@@ -660,8 +664,8 @@ const AdminPortal = (() => {
           <td>${escapeHtml(ticket.priority || '-')}</td>
           <td>${formatShortDate(ticket.created_at)}</td>
           <td class="admin-actions-cell">
-            <button class="icon-button" data-view-ticket="${ticket.id}" title="View">${icon('eye')}</button>
-            <button class="icon-button" data-assign-ticket="${ticket.id}" title="Assign">${icon('users')}</button>
+            <button class="icon-button" data-view-ticket="${ticket.id}" title="View">${imageIcon('/assets/View.png', 'View')}</button>
+            <button class="icon-button" data-assign-ticket="${ticket.id}" title="Forward">${imageIcon('/assets/forward.png', 'Forward')}</button>
             <button class="icon-button" data-close-ticket="${ticket.id}" title="Close" ${ticket.status !== 'Resolved' ? 'disabled' : ''}>${icon('check')}</button>
           </td>
         </tr>
@@ -835,8 +839,8 @@ const AdminPortal = (() => {
           <td>${escapeHtml(user.department_name || '-')}</td>
           <td>${statusBadge(user.is_active ? 'Active' : 'Inactive')}</td>
           <td class="admin-actions-cell">
-            <button class="icon-button" data-edit-user="${user.id}" title="Edit">${icon('edit')}</button>
-            <button class="icon-button" data-toggle-user="${user.id}" title="Toggle Status">${icon(user.is_active ? 'ban' : 'check')}</button>
+            <button class="icon-button" data-edit-user="${user.id}" title="Edit">${imageIcon('/assets/gear_icon.png', 'Edit')}</button>
+            <button class="icon-button" data-toggle-user="${user.id}" title="${user.is_active ? 'Deactivate' : 'Activate'}">${imageIcon(user.is_active ? '/assets/red_cross.png' : '/assets/green_check.png', user.is_active ? 'Deactivate' : 'Activate')}</button>
           </td>
         </tr>
       `).join('') : tableEmptyRow(6, 'No users matched the current filters.');
@@ -1020,8 +1024,8 @@ const AdminPortal = (() => {
           <td>${escapeHtml(company.user_count ?? 0)}</td>
           <td>${escapeHtml(company.ticket_count ?? 0)}</td>
           <td class="admin-actions-cell">
-            <button class="icon-button" data-edit-company="${company.id}" title="Edit">${icon('edit')}</button>
-            <button class="icon-button" data-delete-company="${company.id}" title="Deactivate">${icon('trash')}</button>
+            <button class="icon-button" data-edit-company="${company.id}" title="Edit">${imageIcon('/assets/gear_icon.png', 'Edit')}</button>
+            <button class="icon-button" data-toggle-company="${company.id}" title="${company.is_active ? 'Deactivate' : 'Activate'}">${imageIcon(company.is_active ? '/assets/red_cross.png' : '/assets/green_check.png', company.is_active ? 'Deactivate' : 'Activate')}</button>
           </td>
         </tr>
       `).join('') : tableEmptyRow(7, 'No companies matched the search.');
@@ -1029,15 +1033,21 @@ const AdminPortal = (() => {
       document.querySelectorAll('[data-edit-company]').forEach((button) => {
         button.onclick = () => openCompanyModal(state.companies.find((company) => String(company.id) === button.dataset.editCompany), false);
       });
-      document.querySelectorAll('[data-delete-company]').forEach((button) => {
+      document.querySelectorAll('[data-toggle-company]').forEach((button) => {
         button.onclick = async () => {
-          const result = await deleteCompany(button.dataset.deleteCompany);
+          const company = state.companies.find((entry) => String(entry.id) === button.dataset.toggleCompany);
+          if (!company) {
+            notify('Company not found.', 'error');
+            return;
+          }
+          const nextActive = !Boolean(Number(company.is_active));
+          const result = await updateCompany(company.id, { is_active: nextActive ? 1 : 0 });
           if (result?.success) {
-            notify(result.message || 'Company deactivated.');
+            notify(result.message || `Company ${nextActive ? 'activated' : 'deactivated'}.`);
             state.companies = await fetchCompanies();
             render();
           } else {
-            notify(result?.message || 'Unable to deactivate company.', 'error');
+            notify(result?.message || `Unable to ${nextActive ? 'activate' : 'deactivate'} company.`, 'error');
           }
         };
       });
@@ -1150,7 +1160,7 @@ const AdminPortal = (() => {
           <td>${escapeHtml(department.ticket_count ?? 0)}</td>
           <td>${statusBadge(department.is_active ? 'Active' : 'Inactive')}</td>
           <td class="admin-actions-cell">
-            <button class="icon-button" data-edit-department="${department.id}" title="Edit">${icon('edit')}</button>
+            <button class="icon-button" data-edit-department="${department.id}" title="Edit">${imageIcon('/assets/gear_icon.png', 'Edit')}</button>
           </td>
         </tr>
       `).join('') : tableEmptyRow(5, 'No departments matched the search.');

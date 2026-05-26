@@ -156,3 +156,32 @@ Stores:
 The WOMAN system provides a centralized and structured solution for managing service requests. By integrating ticketing, role-based access, activity tracking, and legacy request encoding, it enhances efficiency, transparency, and scalability for SMSi.
 
 Modern web technologies and cloud deployment ensure the system is reliable, accessible, and ready for future expansion.
+
+---
+
+## 6. How To: Reset `woman_db` (Docker + VSCode PowerShell)
+
+Use this when you want a clean database and need to reinitialize schema + seed data.
+
+### A. Drop and recreate the database
+```powershell
+docker compose exec db mysql -u root -p -e "DROP DATABASE IF EXISTS woman_db; CREATE DATABASE woman_db;"
+```
+
+### B. Load base schema (`database.sql`) from PowerShell
+PowerShell does not support `< file.sql` redirection like bash/cmd, so use piping:
+
+```powershell
+Get-Content .\backend\database.sql -Raw | docker exec -e MYSQL_PWD=YOUR_ROOT_PASSWORD -i smis-woman-db-1 mysql -u root woman_db
+```
+
+Replace `YOUR_ROOT_PASSWORD` with `MYSQL_ROOT_PASSWORD` from `backend/.env`.
+
+### C. Run migrations and seed
+```powershell
+docker exec -it smis-woman-backend-1 node scripts/run_migrations.js
+docker exec -it smis-woman-backend-1 node scripts/seed.js
+```
+
+### D. Common issue
+If you see `Table 'woman_db.users' doesn't exist`, the base schema has not been imported yet. Run step **B** first, then **C**.

@@ -37,9 +37,20 @@ const ticketService = require('./services/ticket.service');
 const app = express();
  
 // CORS — tighten origin in production by setting ALLOWED_ORIGIN in .env
+const configuredOrigins = String(process.env.ALLOWED_ORIGIN || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+const defaultLocalOrigins = ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000', 'http://127.0.0.1:3001'];
+const allowedOrigins = configuredOrigins.length ? configuredOrigins : defaultLocalOrigins;
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || '*',
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("CORS blocked for origin: "));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
  
@@ -150,4 +161,5 @@ app.listen(PORT, '0.0.0.0', () => {
 });
  
 module.exports = app;
+
 

@@ -44,6 +44,10 @@ const AdminPortal = (() => {
     return `<svg class="${className}" aria-hidden="true"><use href="#${symbol}"></use></svg>`;
   }
 
+  function imageIcon(src, alt = '', className = 'action-icon') {
+    return `<img class="${className}" src="${src}" alt="${escapeHtml(alt)}" aria-hidden="true">`;
+  }
+
   function buildAttachmentUrl(url) {
     if (!url) return '';
     const apiBaseCandidate = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || window.LIVE_API || '';
@@ -736,6 +740,9 @@ const AdminPortal = (() => {
           <select id="ticketStatusFilter"><option value="">All Statuses</option><option>Open</option><option>Assigned</option><option>In Progress</option><option>Resolved</option><option>Closed</option></select>
           <select id="ticketPriorityFilter"><option value="">All Priorities</option><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select>
           <select id="ticketCompanyFilter"><option value="">All Companies</option></select>
+          <button class="btn secondary" id="exportTicketsBtn" type="button">${icon('download')}Export CSV</button>
+          <button class="btn secondary" id="importTicketsBtn" type="button">${icon('upload')}Import CSV</button>
+          <input id="importTicketsFile" type="file" accept=".csv,text/csv" style="display:none">
           <button class="btn" id="addTicketBtn" type="button">${icon('plus')}New Ticket</button>
         </div>
         <div class="table-wrap">
@@ -769,17 +776,24 @@ const AdminPortal = (() => {
 
     $('ticketCompanyFilter').innerHTML += companies.map((company) => `<option value="${company.id}">${escapeHtml(company.name)}</option>`).join('');
     $('addTicketBtn').addEventListener('click', openCreateTicketModal);
+    $('exportTicketsBtn').addEventListener('click', exportTicketsCsv);
+    $('importTicketsBtn').addEventListener('click', () => $('importTicketsFile').click());
+    $('importTicketsFile').addEventListener('change', handleImportCsv);
 
     const filterState = { search: '', status: '', priority: '', companyId: '', page: 1 };
 
-    const render = () => {
-      const filtered = state.tickets.filter((ticket) => {
+    function getFilteredTickets() {
+      return state.tickets.filter((ticket) => {
         const text = `${ticket.work_order_id || ''} ${ticket.title || ''} ${ticket.company_name || ''} ${ticket.requestor_name || ''}`.toLowerCase();
         return (!filterState.search || text.includes(filterState.search))
           && (!filterState.status || ticket.status === filterState.status)
           && (!filterState.priority || ticket.priority === filterState.priority)
           && (!filterState.companyId || String(ticket.company_id) === filterState.companyId);
       });
+    }
+
+    const render = () => {
+      const filtered = getFilteredTickets();
 
       const items = pageSlice(filtered, filterState.page);
       $('adminTicketsBody').innerHTML = items.length ? items.map((ticket) => `
@@ -792,8 +806,8 @@ const AdminPortal = (() => {
           <td>${escapeHtml(ticket.priority || '-')}</td>
           <td>${formatShortDate(ticket.created_at)}</td>
           <td class="admin-actions-cell">
-            <button class="icon-button" data-view-ticket="${ticket.id}" title="View">${icon('eye')}</button>
-            <button class="icon-button" data-assign-ticket="${ticket.id}" title="Assign">${icon('users')}</button>
+            <button class="icon-button" data-view-ticket="${ticket.id}" title="View">${imageIcon('/assets/View.png', 'View')}</button>
+            <button class="icon-button" data-assign-ticket="${ticket.id}" title="Forward">${imageIcon('/assets/forward.png', 'Forward')}</button>
             <button class="icon-button" data-close-ticket="${ticket.id}" title="Close" ${ticket.status !== 'Resolved' ? 'disabled' : ''}>${icon('check')}</button>
           </td>
         </tr>
@@ -810,6 +824,322 @@ const AdminPortal = (() => {
 
       bindTicketActions();
     };
+
+    function csvEscape(value) {
+      const raw = String(value == null ? '' : value);
+      if (/[",\n]/.test(raw)) {
+        return `"${raw.replace(/"/g, '""')}"`;
+      }
+      return raw;
+    }
+
+    function exportTicketsCsv() {
+      const rows = getFilteredTickets();
+      const header = ['title', 'description', 'priority', 'requestor_id', 'requestor_name', 'requestor_email', 'company_id', 'company_name', 'company_contact_person', 'company_contact_email', 'company_status', 'department_id', 'department_name'];
+      const lines = [header.join(',')];
+
+      rows.forEach((ticket) => {
+        lines.push([
+          csvEscape(ticket.title || ''),
+          csvEscape(ticket.description || ''),
+          csvEscape(ticket.priority || 'Medium'),
+          csvEscape(ticket.requestor_id || ''),
+          csvEscape(ticket.requestor_name || ''),
+          csvEscape(ticket.requestor_email || ''),
+          csvEscape(ticket.company_id || ''),
+          csvEscape(ticket.company_name || ''),
+          csvEscape(ticket.company_contact_person || ''),
+          csvEscape(ticket.company_contact_email || ''),
+          csvEscape(Number(ticket.company_is_active) === 0 ? 'Inactive' : 'Active'),
+          csvEscape(ticket.department_id || ''),
+          csvEscape(ticket.department_name || '')
+        ].join(','));
+      });
+
+      const csv = lines.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tickets-export-${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      notify(`Exported ${rows.length} ticket(s).`);
+    }
+
+    function parseCsvLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          result.push(current);
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      result.push(current);
+      return result;
+    }
+
+    function parseCsv(text) {
+      const lines = String(text || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (!lines.length) return [];
+      const headers = parseCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
+      const rows = [];
+      for (let i = 1; i < lines.length; i += 1) {
+        const values = parseCsvLine(lines[i]);
+        const row = {};
+        headers.forEach((header, index) => {
+          row[header] = (values[index] || '').trim();
+        });
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    function normalizePriority(value) {
+      const raw = String(value || '').trim().toLowerCase();
+      if (raw === 'low') return 'Low';
+      if (raw === 'high') return 'High';
+      if (raw === 'critical') return 'Critical';
+      return 'Medium';
+    }
+
+    function randomStrongPassword() {
+      const seed = Math.random().toString(36).slice(2, 10);
+      return `Temp#${seed}A1`;
+    }
+
+    function normalizeEmail(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function normalizeName(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function normalizeCompanyActiveFlag(row) {
+      const raw = String(row.company_status ?? row.company_is_active ?? row.is_active ?? '').trim().toLowerCase();
+      if (!raw) return 1;
+      if (['0', 'false', 'inactive', 'disabled', 'no'].includes(raw)) return 0;
+      if (['1', 'true', 'active', 'enabled', 'yes'].includes(raw)) return 1;
+      return 1;
+    }
+
+    function buildSyntheticEmail(name, companyName, rowNumber) {
+      const clean = (value, fallback) => {
+        const slug = String(value || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '.')
+          .replace(/^\.+|\.+$/g, '');
+        return slug || fallback;
+      };
+      const userPart = clean(name, `imported.user.${rowNumber}`);
+      const companyPart = clean(companyName, 'imported-company');
+      return `${userPart}.${rowNumber}@${companyPart}.import`;
+    }
+
+    function resolveClientIdFromRow(row) {
+      if (row.requestor_id) return Number(row.requestor_id);
+      const email = String(row.requestor_email || row.client_email || '').trim().toLowerCase();
+      if (!email) return null;
+      const matched = state.clients.find((client) => String(client.email || '').trim().toLowerCase() === email);
+      return matched ? Number(matched.id) : null;
+    }
+
+    async function ensureCompanyForImport(row, rowNumber, notes) {
+      const parsedCompanyId = row.company_id ? Number(row.company_id) : null;
+      const companyName = String(row.company_name || '').trim();
+
+      if (Number.isFinite(parsedCompanyId)) {
+        const existingById = state.companies.find((company) => Number(company.id) === parsedCompanyId);
+        if (existingById) return Number(existingById.id);
+      }
+
+      if (companyName) {
+        const normalized = normalizeName(companyName);
+        const existingByName = state.companies.find((company) => normalizeName(company.name) === normalized);
+        if (existingByName) return Number(existingByName.id);
+
+        const created = await createCompany({
+          name: companyName,
+          contact_person: row.company_contact_person || row.contact_person || null,
+          contact_email: row.company_contact_email || row.contact_email || null,
+          is_active: normalizeCompanyActiveFlag(row)
+        });
+
+        if (!created?.success || !created?.company?.id) {
+          notes.push(`Row ${rowNumber}: unable to auto-create company "${companyName}".`);
+          return null;
+        }
+
+        const newCompany = {
+          id: created.company.id,
+          name: created.company.name || companyName
+        };
+        state.companies.push(newCompany);
+        notes.push(`Row ${rowNumber}: created company "${newCompany.name}" (ID ${newCompany.id}).`);
+        return Number(newCompany.id);
+      }
+
+      if (Number.isFinite(parsedCompanyId)) {
+        notes.push(`Row ${rowNumber}: unknown company_id ${parsedCompanyId}; left empty.`);
+      }
+
+      return null;
+    }
+
+    async function ensureClientForImport(row, rowNumber, companyId, allUsers, notes) {
+      const parsedRequestorId = row.requestor_id ? Number(row.requestor_id) : null;
+      if (Number.isFinite(parsedRequestorId)) {
+        const existingById = allUsers.find((user) => Number(user.id) === parsedRequestorId);
+        if (existingById) return Number(existingById.id);
+        notes.push(`Row ${rowNumber}: requestor_id ${parsedRequestorId} not found; attempting email/name resolution.`);
+      }
+
+      let email = normalizeEmail(row.requestor_email || row.client_email);
+      if (email) {
+        const existingByEmail = allUsers.find((user) => normalizeEmail(user.email) === email);
+        if (existingByEmail) return Number(existingByEmail.id);
+      }
+
+      const name = String(row.requestor_name || row.client_name || '').trim();
+      if (!name) {
+        notes.push(`Row ${rowNumber}: requestor could not be resolved. Provide requestor_name/client_name.`);
+        return null;
+      }
+
+      if (!companyId) {
+        notes.push(`Row ${rowNumber}: cannot auto-create user "${email}" without company_id/company_name.`);
+        return null;
+      }
+
+      if (!email) {
+        const companyName = String(row.company_name || '').trim();
+        email = buildSyntheticEmail(name, companyName, rowNumber);
+        notes.push(`Row ${rowNumber}: generated placeholder email "${email}" for requestor "${name}".`);
+      }
+
+      const created = await createUser({
+        name,
+        email,
+        password: randomStrongPassword(),
+        role: 'client',
+        company_id: Number(companyId)
+      });
+
+      if (!created?.success || !created?.user?.id) {
+        notes.push(`Row ${rowNumber}: unable to auto-create requestor "${email}".`);
+        return null;
+      }
+
+      state.clients.push(created.user);
+      allUsers.push(created.user);
+      notes.push(`Row ${rowNumber}: created client user "${email}" (ID ${created.user.id}).`);
+      return Number(created.user.id);
+    }
+
+    async function handleImportCsv(event) {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const rows = parseCsv(text);
+        if (!rows.length) {
+          notify('Import file is empty.', 'error');
+          return;
+        }
+
+        const allUsers = await fetchUsers();
+        const knownUserIds = new Set(allUsers.map((user) => Number(user.id)).filter(Number.isFinite));
+        let created = 0;
+        const errors = [];
+        const notes = [];
+
+        for (let i = 0; i < rows.length; i += 1) {
+          const row = rows[i];
+          const rowNumber = i + 2;
+          const title = String(row.title || '').trim();
+          const description = String(row.description || '').trim();
+          const priority = normalizePriority(row.priority);
+          const departmentId = row.department_id ? Number(row.department_id) : null;
+
+          const companyId = await ensureCompanyForImport(row, rowNumber, notes);
+          const requestorId = await ensureClientForImport(row, rowNumber, companyId, allUsers, notes);
+          if (Number.isFinite(requestorId)) {
+            knownUserIds.add(Number(requestorId));
+          }
+
+          if (!title || !description || !requestorId) {
+            errors.push(`Row ${rowNumber}: missing required title/description/requestor.`);
+            continue;
+          }
+
+          if (!knownUserIds.has(Number(requestorId))) {
+            errors.push(`Row ${rowNumber}: resolved requestor_id ${requestorId} is not present in users table.`);
+            continue;
+          }
+
+          const payload = {
+            title,
+            description,
+            priority,
+            requestor_id: requestorId,
+            company_id: Number.isFinite(companyId) ? companyId : null,
+            department_id: Number.isFinite(departmentId) ? departmentId : null
+          };
+
+          const result = await createTicket(payload);
+          if (result?.success) {
+            created += 1;
+          } else {
+            errors.push(`Row ${rowNumber}: ${result?.message || 'unable to create ticket'}`);
+          }
+        }
+
+        const [tickets, companies, clients] = await Promise.all([
+          fetchTickets(),
+          fetchCompanies(),
+          fetchUsers({ role: 'client' })
+        ]);
+        state.tickets = tickets;
+        state.companies = companies;
+        state.clients = clients;
+        render();
+
+        if (notes.length) {
+          console.info('Ticket CSV import provisioning notes:\n' + notes.join('\n'));
+        }
+
+        if (errors.length) {
+          notify(`Imported ${created} ticket(s) with ${errors.length} error(s). ${notes.length ? `Auto-provisioned ${notes.length} item(s). ` : ''}Check console for details.`, created ? 'success' : 'error');
+          console.warn('Ticket CSV import errors:\n' + errors.join('\n'));
+        } else {
+          notify(`Imported ${created} ticket(s) successfully.${notes.length ? ` Auto-provisioned ${notes.length} item(s).` : ''}`);
+        }
+      } catch (error) {
+        console.error(error);
+        notify('Unable to import CSV file.', 'error');
+      }
+    }
 
     const resetPageAndRender = () => {
       filterState.page = 1;
@@ -1099,8 +1429,8 @@ const AdminPortal = (() => {
           <td>${escapeHtml(user.department_name || '-')}</td>
           <td>${statusBadge(user.is_active ? 'Active' : 'Inactive')}</td>
           <td class="admin-actions-cell">
-            <button class="icon-button" data-edit-user="${user.id}" title="Edit">${icon('edit')}</button>
-            <button class="icon-button" data-toggle-user="${user.id}" title="Toggle Status">${icon(user.is_active ? 'ban' : 'check')}</button>
+            <button class="icon-button" data-edit-user="${user.id}" title="Edit">${imageIcon('/assets/gear_icon.png', 'Edit')}</button>
+            <button class="icon-button" data-toggle-user="${user.id}" title="${user.is_active ? 'Deactivate' : 'Activate'}">${imageIcon(user.is_active ? '/assets/red_cross.png' : '/assets/green_check.png', user.is_active ? 'Deactivate' : 'Activate')}</button>
           </td>
         </tr>
       `).join('') : tableEmptyRow(6, 'No users matched the current filters.');
@@ -1293,8 +1623,8 @@ const AdminPortal = (() => {
           <td>${escapeHtml(company.user_count ?? 0)}</td>
           <td>${escapeHtml(company.ticket_count ?? 0)}</td>
           <td class="admin-actions-cell">
-            <button class="icon-button" data-edit-company="${company.id}" title="Edit">${icon('edit')}</button>
-            <button class="icon-button" data-delete-company="${company.id}" title="Deactivate">${icon('trash')}</button>
+            <button class="icon-button" data-edit-company="${company.id}" title="Edit">${imageIcon('/assets/gear_icon.png', 'Edit')}</button>
+            <button class="icon-button" data-toggle-company="${company.id}" title="${company.is_active ? 'Deactivate' : 'Activate'}">${imageIcon(company.is_active ? '/assets/red_cross.png' : '/assets/green_check.png', company.is_active ? 'Deactivate' : 'Activate')}</button>
           </td>
         </tr>
       `).join('') : tableEmptyRow(7, 'No companies matched the search.');
@@ -1302,15 +1632,21 @@ const AdminPortal = (() => {
       document.querySelectorAll('[data-edit-company]').forEach((button) => {
         button.onclick = () => openCompanyModal(state.companies.find((company) => String(company.id) === button.dataset.editCompany), false);
       });
-      document.querySelectorAll('[data-delete-company]').forEach((button) => {
+      document.querySelectorAll('[data-toggle-company]').forEach((button) => {
         button.onclick = async () => {
-          const result = await deleteCompany(button.dataset.deleteCompany);
+          const company = state.companies.find((entry) => String(entry.id) === button.dataset.toggleCompany);
+          if (!company) {
+            notify('Company not found.', 'error');
+            return;
+          }
+          const nextActive = !Boolean(Number(company.is_active));
+          const result = await updateCompany(company.id, { is_active: nextActive ? 1 : 0 });
           if (result?.success) {
-            notify(result.message || 'Company deactivated.');
+            notify(result.message || `Company ${nextActive ? 'activated' : 'deactivated'}.`);
             state.companies = await fetchCompanies();
             render();
           } else {
-            notify(result?.message || 'Unable to deactivate company.', 'error');
+            notify(result?.message || `Unable to ${nextActive ? 'activate' : 'deactivate'} company.`, 'error');
           }
         };
       });
@@ -1459,7 +1795,7 @@ const AdminPortal = (() => {
           <td>${escapeHtml(department.ticket_count ?? 0)}</td>
           <td>${statusBadge(department.is_active ? 'Active' : 'Inactive')}</td>
           <td class="admin-actions-cell">
-            <button class="icon-button" data-edit-department="${department.id}" title="Edit">${icon('edit')}</button>
+            <button class="icon-button" data-edit-department="${department.id}" title="Edit">${imageIcon('/assets/gear_icon.png', 'Edit')}</button>
           </td>
         </tr>
       `).join('') : tableEmptyRow(5, 'No departments matched the search.');

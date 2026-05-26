@@ -3,11 +3,7 @@
 // Fully aligned with backend routes/services
 // ============================================================
 
-const apiBaseUrl = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL;
-
-if (!apiBaseUrl) {
-  throw new Error('API_BASE_URL is not configured. Load frontend/js/config.js before frontend/js/api.js.');
-}
+const apiBaseUrl = window.APP_CONFIG?.API_BASE_URL || window.API_BASE_URL || '/api';
 
 // Shared navigation helper used by multiple role shells
 window.SharedNav = (function () {
@@ -155,23 +151,26 @@ function storageSet(key, value, role) {
 
 function storageRemoveSession(role = getPageRole()) {
   const normalizedRole = normalizeStorageRole(role);
-  if (!normalizedRole) return;
-
   ['token', 'user', 'id', 'role', 'company_id', 'company_name', 'department_id', 'department_name', 'exp'].forEach((key) => {
-    const actualKey = buildSessionKey(SESSION_BASE_KEYS[key], normalizedRole);
     const legacyKey = SESSION_BASE_KEYS[key];
-    localStorage.removeItem(actualKey);
-    sessionStorage.removeItem(actualKey);
-    if (legacyKey !== actualKey) {
-      localStorage.removeItem(legacyKey);
-      sessionStorage.removeItem(legacyKey);
+    localStorage.removeItem(legacyKey);
+    sessionStorage.removeItem(legacyKey);
+
+    if (normalizedRole) {
+      const actualKey = buildSessionKey(SESSION_BASE_KEYS[key], normalizedRole);
+      if (actualKey !== legacyKey) {
+        localStorage.removeItem(actualKey);
+        sessionStorage.removeItem(actualKey);
+      }
     }
   });
 
-  try { clearAutoLogout(normalizedRole); } catch (_) {}
+  if (normalizedRole) {
+    try { clearAutoLogout(normalizedRole); } catch (_) {}
+  }
 }
 
-const getToken = () => storageGet('token');
+function getToken() { return storageGet('token'); }
 
 const getUser = () => {
   try {
@@ -210,6 +209,10 @@ const saveSession = (token, user) => {
 
 function logout(role = getPageRole()) {
   storageRemoveSession(role);
+  const path = String(window.location.pathname || '').toLowerCase();
+  if (path.endsWith('/login.html') || path === '/login.html') {
+    return;
+  }
   window.location.href = '/login.html';
 }
 
@@ -306,7 +309,7 @@ function saveUserSession(user) {
    CORE REQUEST WRAPPER
 =========================================================== */
 async function apiRequest(path, options = {}) {
-  const token = getToken();
+  const token = storageGet('token');
 
   // if token exists, try to determine expiry (prefer stored expiry, fall back to JWT payload)
   if (token) {
@@ -338,6 +341,13 @@ async function apiRequest(path, options = {}) {
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 401) {
+      if (path === '/auth/login') {
+        return {
+          success: false,
+          message: data.message || 'Invalid login credentials'
+        };
+      }
+
       if (path === '/auth/me') {
         return null;
       }
@@ -463,13 +473,10 @@ async function fetchTicket(id) {
 async function createTicket(payload, attachmentFile) {
   if (attachmentFile) {
     const formData = new FormData();
-    formData.append('title', payload.title);
-    formData.append('description', payload.description);
-    formData.append('priority', payload.priority);
-    if (payload.requestor_id) formData.append('requestor_id', payload.requestor_id);
-    if (payload.client_id) formData.append('client_id', payload.client_id);
-    if (payload.company_id) formData.append('company_id', payload.company_id);
-    if (payload.department_id) formData.append('department_id', payload.department_id);
+    Object.entries(payload || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      formData.append(key, value);
+    });
     formData.append('attachment', attachmentFile);
     return await apiRequest('/tickets', {
       method: 'POST',
@@ -803,9 +810,10 @@ window.logout = logout;
 // Initialize auto-logout scheduler if a valid token exists on load
 (function initSession() {
   try {
-    const t = getToken();
+    const t = storageGet('token');
     if (t) scheduleAutoLogout(t);
   } catch (e) {
     // ignore
   }
 })();
+

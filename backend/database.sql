@@ -64,6 +64,10 @@ ALTER TABLE departments
 CREATE TABLE IF NOT EXISTS tickets (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   work_order_id VARCHAR(30) NOT NULL UNIQUE,
+  client_full_name VARCHAR(150) NULL,
+  client_email VARCHAR(150) NULL,
+  client_phone VARCHAR(30) NULL,
+  help_topic VARCHAR(150) NULL,
   title VARCHAR(255) NOT NULL,
   description TEXT NULL,
   priority ENUM('Low','Medium','High','Critical') NOT NULL DEFAULT 'Medium',
