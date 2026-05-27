@@ -105,7 +105,7 @@ const getTechnicians = async () => {
        ON t.technician_id = u.id
       AND t.status NOT IN ('Resolved', 'Closed')
      WHERE u.role = 'technician' AND u.is_active = 1
-     GROUP BY u.id, d.name
+     GROUP BY u.id, u.name, u.email, u.department_id, d.name
      ORDER BY active_tickets ASC, u.name ASC`
   );
 

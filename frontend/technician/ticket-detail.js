@@ -398,23 +398,73 @@ async function openAssignModal() {
     fetchDepartments()
   ]);
 
+  console.log('DEBUG: openAssignModal - technicians:', technicians);
+  console.log('DEBUG: openAssignModal - departments:', departments);
+  console.log('DEBUG: currentTicket.department_id:', currentTicket?.department_id);
+
   const techSelect = document.getElementById('assignTechnicianSelect');
   const deptSelect = document.getElementById('assignDepartmentSelect');
 
-  techSelect.innerHTML = '<option value="">Select technician</option>' + technicians.map((user) => `
-    <option value="${user.id}" ${String(currentTicket?.technician_id || '') === String(user.id) ? 'selected' : ''}>
-      ${escapeHtml(user.name)}${Number.isFinite(Number(user.active_tickets)) ? ` (${user.active_tickets} active)` : ''}
-    </option>
-  `).join('');
+  // Store all technicians for filtering
+  window._allTechnicians = technicians;
 
-  deptSelect.innerHTML = '<option value="">Keep current department</option>' + departments.map((department) => `
+  // Populate department select
+  deptSelect.innerHTML = '<option value="">Select department</option>' + departments.map((department) => `
     <option value="${department.id}" ${String(currentTicket?.department_id || '') === String(department.id) ? 'selected' : ''}>
       ${escapeHtml(department.name)}
     </option>
   `).join('');
 
+  // Get the currently selected department
+  const currentDeptId = deptSelect.value;
+  console.log('DEBUG: currentDeptId after population:', currentDeptId);
+
+  // Update technician list based on selected department
+  updateTechnicianSelectByDepartment(techSelect, technicians, currentDeptId);
+
+  // Add change listener for department select
+  deptSelect.addEventListener('change', () => {
+    updateTechnicianSelectByDepartment(techSelect, technicians, deptSelect.value);
+  });
+
   setMessage(document.getElementById('assignMessage'), '');
   AppModals.open('assignModal');
+}
+
+function updateTechnicianSelectByDepartment(techSelect, allTechnicians, selectedDeptId) {
+  console.log('DEBUG: updateTechnicianSelectByDepartment - selectedDeptId:', selectedDeptId, 'type:', typeof selectedDeptId);
+  console.log('DEBUG: allTechnicians:', allTechnicians);
+
+  if (!selectedDeptId) {
+    console.log('DEBUG: No department selected');
+    techSelect.innerHTML = '<option value="">Select department first</option>';
+    techSelect.disabled = true;
+    return;
+  }
+
+  // Filter technicians by selected department
+  const filtered = allTechnicians.filter((tech) => {
+    const techDeptId = String(tech.department_id || '');
+    const deptId = String(selectedDeptId);
+    console.log(`DEBUG: Comparing tech "${tech.name}" - techDeptId="${techDeptId}" vs deptId="${deptId}" - match: ${techDeptId === deptId}`);
+    return techDeptId === deptId;
+  });
+
+  console.log('DEBUG: Filtered technicians:', filtered);
+
+  if (filtered.length === 0) {
+    console.log('DEBUG: No technicians found in this department');
+    techSelect.innerHTML = '<option value="">No technicians in this department</option>';
+    techSelect.disabled = true;
+    return;
+  }
+
+  techSelect.disabled = false;
+  techSelect.innerHTML = '<option value="">Select technician</option>' + filtered.map((user) => `
+    <option value="${user.id}" ${String(currentTicket?.technician_id || '') === String(user.id) ? 'selected' : ''}>
+      ${escapeHtml(user.name)}${Number.isFinite(Number(user.active_tickets)) ? ` (${user.active_tickets} active)` : ''}
+    </option>
+  `).join('');
 }
 
 async function submitAssignment() {

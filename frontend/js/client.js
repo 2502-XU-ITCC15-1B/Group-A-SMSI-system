@@ -3,16 +3,17 @@ window.ClientPortal = (() => {
   let onTicketCreated = null;
   let cachedDepartments = [];
   const HELP_TOPICS = [
-    { value: 'system-outage', label: 'System Outage / Service Unavailable', departmentName: 'IT Support' },
-    { value: 'software-access', label: 'Software Access / Login Problem', departmentName: 'IT Support' },
-    { value: 'bug-error', label: 'Application Bug / Error', departmentName: 'IT Support' },
-    { value: 'web-graphics-design', label: 'Web / Graphics Change Request', departmentName: 'IT Support' },
-    { value: 'network-connectivity', label: 'Network / Internet Connectivity', departmentName: 'IT Support' },
-    { value: 'hardware-device', label: 'Hardware / Device Issue', departmentName: 'IT Support' },
-    { value: 'account-payroll', label: 'Account, Payroll, or Financial Concern', departmentName: 'Finance' },
-    { value: 'billing-invoice', label: 'Billing / Invoice Concern', departmentName: 'Finance' },
-    { value: 'hr-employee-concern', label: 'HR / Employee Concern', departmentName: 'HR Support' },
-    { value: 'facilities-safety', label: 'Facilities / Safety Concern', departmentName: 'Facilities' },
+    { value: 'system-outage', label: 'System Outage / Service Unavailable', departmentName: 'Technical Support' },
+    { value: 'software-access', label: 'Software Access / Login Problem', departmentName: 'Technical Support' },
+    { value: 'bug-error', label: 'Application Bug / Error', departmentName: 'Systems Development' },
+    { value: 'web-graphics-design', label: 'Web / Graphics Change Request', departmentName: 'Web & Graphics Services' },
+    { value: 'network-connectivity', label: 'Network / Internet Connectivity', departmentName: 'Technical Support' },
+    { value: 'hardware-device', label: 'Hardware / Device Issue', departmentName: 'Technical Support' },
+    { value: 'facilities-safety', label: 'Facilities / Safety Concern', departmentName: 'Operations' },
+    { value: 'infrastructure-ops', label: 'Infrastructure / Systems Operations', departmentName: 'Operations' },
+    { value: 'workflow-process', label: 'Workflow / Process Improvement Request', departmentName: 'Operations' },
+    { value: 'account-payroll', label: 'Account, Payroll, or Financial Concern', departmentName: '' },
+    { value: 'hr-employee-concern', label: 'HR / Employee / Compliance Concern', departmentName: '' },
     { value: 'other', label: 'Other / Not Listed', departmentName: '' }
   ];
   const navItems = [
@@ -223,15 +224,7 @@ window.ClientPortal = (() => {
               <input id="ticketTitle" type="text" maxlength="150" required>
             </div>
 
-            <div class="field">
-              <label for="ticketPriority">Priority</label>
-              <select id="ticketPriority" required>
-                <option value="Low">Low</option>
-                <option value="Medium" selected>Medium</option>
-                <option value="High">High</option>
-                <option value="Critical">Critical</option>
-              </select>
-            </div>
+            
 
             <div class="field">
               <label for="ticketDescription">Description</label>
@@ -351,7 +344,6 @@ window.ClientPortal = (() => {
   function closeTicketModal() {
     document.getElementById('ticketModal')?.classList.remove('open');
     document.getElementById('clientTicketForm')?.reset();
-    document.getElementById('ticketPriority').value = 'Medium';
     populateTicketContext();
     handleHelpTopicChange();
     setModalMessage();
@@ -368,11 +360,11 @@ window.ClientPortal = (() => {
       help_topic: document.getElementById('ticketHelpTopic')?.value,
       department_id: document.getElementById('ticketDepartment')?.value || null,
       title: document.getElementById('ticketTitle')?.value.trim(),
-      priority: document.getElementById('ticketPriority')?.value,
+      priority: 'Low',
       description: document.getElementById('ticketDescription')?.value.trim()
     };
 
-    if (!payload.client_email || !payload.client_phone || !payload.client_full_name || !payload.help_topic || !payload.title || !payload.description || !payload.priority) {
+    if (!payload.client_email || !payload.client_phone || !payload.client_full_name || !payload.help_topic || !payload.title || !payload.description) {
       setModalMessage('Please complete all required fields.', 'error');
       return;
     }

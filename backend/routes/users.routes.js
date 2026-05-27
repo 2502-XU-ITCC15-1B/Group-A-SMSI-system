@@ -3,14 +3,11 @@ const router      = express.Router();
 const userService = require('../services/user.service');
 const { authenticate, authorize } = require('../middleware/auth');
 
-// All user management routes are admin-only
-router.use(authenticate, authorize('admin'));
-
-// GET    /api/users
-// → list all users (supports filters via query params)
-router.get('/', async (req, res) => {
+// GET    /api/users/technicians
+// → list technicians (allowed for heads and admins)
+router.get('/technicians', authenticate, authorize('head', 'admin'), async (req, res) => {
   try {
-    const users = await userService.getAll(req.query);
+    const users = await userService.getTechnicians();
     res.json({ success: true, users });
   } catch (err) {
     res.status(err.status || 500).json({
@@ -20,11 +17,14 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET    /api/users/technicians
-// → list technicians (optionally with workload/metrics)
-router.get('/technicians', async (req, res) => {
+// All other user management routes are admin-only
+router.use(authenticate, authorize('admin'));
+
+// GET    /api/users
+// → list all users (supports filters via query params)
+router.get('/', async (req, res) => {
   try {
-    const users = await userService.getTechnicians();
+    const users = await userService.getAll(req.query);
     res.json({ success: true, users });
   } catch (err) {
     res.status(err.status || 500).json({

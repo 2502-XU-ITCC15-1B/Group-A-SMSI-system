@@ -172,7 +172,7 @@ docker compose exec db mysql -u root -p -e "DROP DATABASE IF EXISTS woman_db; CR
 PowerShell does not support `< file.sql` redirection like bash/cmd, so use piping:
 
 ```powershell
-Get-Content .\backend\database.sql -Raw | docker exec -e MYSQL_PWD=YOUR_ROOT_PASSWORD -i smis-woman-db-1 mysql -u root woman_db
+Get-Content .\backend\database.sql -Raw | docker exec -e MYSQL_PWD=rootpassword -i smis-woman-db-1 mysql -u root woman_db
 ```
 
 Replace `YOUR_ROOT_PASSWORD` with `MYSQL_ROOT_PASSWORD` from `backend/.env`.

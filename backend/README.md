@@ -141,7 +141,7 @@ SELECT * FROM tickets;
 ### Run seed script
 
 ```bash
-docker exec -it group-a-smsi-backend-1 node scripts/seed.js
+docker exec -it smis-woman-backend-1 node scripts/seed.js
 ```
 
 ### Run any script

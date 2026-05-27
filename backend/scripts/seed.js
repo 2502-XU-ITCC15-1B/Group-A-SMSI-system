@@ -23,47 +23,119 @@ const users = [
     department_id: null
   },
   {
-    name: 'Tech Support',
-    email: 'tech@smsi.com',
-    password: 'Tech@SMSI2026',
+    name: 'Systems Head',
+    email: 'Systems@smsi.com',
+    password: 'Systems@SMSI2026',
+    phone: '+1-555-0102',
+    role: 'head',
+    company_id: null,
+    department_id: 1
+  },
+  {
+    name: 'System Developer 1',
+    email: 'SysDev1@smsi.com',
+    password: 'Dev1@SMSI2026',
     phone: '+1-555-0102',
     role: 'technician',
     company_id: null,
     department_id: 1
   },
   {
-    name: 'Department Head',
-    email: 'head@smsi.com',
-    password: 'Head@SMSI2026',
-    phone: '+1-555-0103',
-    role: 'head',
+    name: 'System Developer 2',
+    email: 'SysDev2@smsi.com',
+    password: 'Dev2@SMSI2026',
+    phone: '+1-555-0102',
+    role: 'technician',
     company_id: null,
     department_id: 1
   },
   {
-    name: 'HR Head',
-    email: 'head-hr@smsi.com',
-    password: 'HeadHR@2026',
-    phone: '+1-555-0104',
+    name: 'System Developer 3',
+    email: 'SysDev3@smsi.com',
+    password: 'Dev3@SMSI2026',
+    phone: '+1-555-0102',
+    role: 'technician',
+    company_id: null,
+    department_id: 1
+  },
+  {
+    name: 'Web & Graphics Services Head',
+    email: 'W&GS@smsi.com',
+    password: 'W&GS@SMSI2026',
+    phone: '+1-555-0103',
     role: 'head',
     company_id: null,
     department_id: 2
   },
   {
-    name: 'Facilities Head',
-    email: 'head-fac@smsi.com',
-    password: 'HeadFAC@2026',
-    phone: '+1-555-0105',
+    name: 'Graphic Designers1',
+    email: 'GraphDesigners1@smsi.com',
+    password: 'GraphDesigners1@SMSI2026',
+    phone: '+1-555-0102',
+    role: 'technician',
+    company_id: null,
+    department_id: 2
+  },
+  {
+    name: 'Graphic Designers2',
+    email: 'GraphDesigners2@smsi.com',
+    password: 'GraphDesigners2@SMSI2026',
+    phone: '+1-555-0102',
+    role: 'technician',
+    company_id: null,
+    department_id: 2
+  },
+  {
+    name: 'Technical Support Head',
+    email: 'TS@smsi.com',
+    password: 'TS@2026',
+    phone: '+1-555-0104',
     role: 'head',
     company_id: null,
     department_id: 3
   },
   {
-    name: 'Finance Head',
-    email: 'head-fin@smsi.com',
-    password: 'HeadFIN@2026',
-    phone: '+1-555-0106',
+    name: 'IT Specialist 1',
+    email: 'ITSpecialist1@smsi.com',
+    password: 'ITSpecialist1@SMSI2026',
+    phone: '+1-555-0102',
+    role: 'technician',
+    company_id: null,
+    department_id: 3
+  },
+  {
+    name: 'IT Specialist 2',
+    email: 'ITSpecialist2@smsi.com',
+    password: 'ITSpecialist2@SMSI2026',
+    phone: '+1-555-0102',
+    role: 'technician',
+    company_id: null,
+    department_id: 3
+  },
+  {
+    name: 'Operations Head',
+    email: 'Operations@smsi.com',
+    password: 'OP@2026',
+    phone: '+1-555-0105',
     role: 'head',
+    company_id: null,
+    department_id: 4
+  },
+  {
+    name: 'Operations Associate 1',
+    email: 'OPAssociate1@smsi.com',
+    password: 'OPAssociate1@2026',
+    phone: '+1-555-0105',
+    role: 'technician',
+    company_id: null,
+    department_id: 4
+  },
+  {
+    name: 'Operations Associate 2',
+    email: 'OPAssociate2@smsi.com',
+    password: 'OPAssociate2@2026',
+    phone: '+1-555-0105',
+    role: 'technician',
     company_id: null,
     department_id: 4
   },
@@ -98,10 +170,10 @@ const companies = [
 // DEPARTMENTS
 // ------------------------------------------------------------
 const departments = [
-  { id: 1, name: 'IT Support', manager_email: 'head@smsi.com', is_active: 1 },
-  { id: 2, name: 'HR Support', manager_email: 'head-hr@smsi.com', is_active: 1 },
-  { id: 3, name: 'Facilities', manager_email: 'head-fac@smsi.com', is_active: 1 },
-  { id: 4, name: 'Finance', manager_email: 'head-fin@smsi.com', is_active: 1 }
+  { id: 1, name: 'Systems Development', manager_email: 'Systems@smsi.com', is_active: 1 },
+  { id: 2, name: 'Web & Graphics Services', manager_email: 'W&GS@smsi.com', is_active: 1 },
+  { id: 3, name: 'Technical Support', manager_email: 'TS@smsi.com', is_active: 1 },
+  { id: 4, name: 'Operations', manager_email: 'Operations@smsi.com', is_active: 1 }
 ];
 
 // ------------------------------------------------------------
@@ -240,7 +312,7 @@ const logs = [
           t.company_id,
           t.department_id,
           userIds['client@testco.com'],
-          userIds['tech@smsi.com'],
+          userIds['sysdev1@smsi.com'],
           t.priority,
           t.status
         ]
@@ -263,7 +335,7 @@ const logs = [
       await pool.query(
         `INSERT INTO ticket_responses (ticket_id, user_id, message, internal_note)
          VALUES (?, ?, ?, ?)`,
-        [ticketIds['WO-2026-0001'], userIds['tech@smsi.com'], r.message, r.internal_note]
+        [ticketIds['WO-2026-0001'], userIds['sysdev1@smsi.com'], r.message, r.internal_note]
       );
     }
 
